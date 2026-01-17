@@ -61,6 +61,7 @@ class RecordParser:
                         if record['name']:
                             if pending_name:
                                 records.append({
+                                    'label': '',
                                     'name': pending_name,
                                     'items': [],
                                     'modifiers': [],
@@ -69,6 +70,7 @@ class RecordParser:
                             pending_name = record['name']
         if mode == 'multi' and pending_name:
             records.append({
+                'label': '',
                 'name': pending_name,
                 'items': [],
                 'modifiers': [],
@@ -84,13 +86,14 @@ class RecordParser:
         row: The DataFrame row.
 
         Returns:
-        dict: Dictionary with 'name', 'items', 'modifiers', 'scores' or None if no label.
+        dict: Dictionary with 'label', 'name', 'items', 'modifiers', 'scores' or None if no label.
         """
         label = row[3] if len(row) > 3 and pd.notna(row[3]) else None
         if label:
             name, items, modifiers = self._parse_item_string(str(label))
             scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
             return {
+                'label': str(label),
                 'name': name,
                 'items': items,
                 'modifiers': modifiers,
