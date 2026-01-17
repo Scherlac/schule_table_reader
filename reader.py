@@ -106,7 +106,7 @@ class SectionParser:
     def __init__(self) -> None:
         self.record_parser = RecordParser()
 
-    def parse_section(self, df: pd.DataFrame, section_name: str, approx_start: int, multi_row: bool = False) -> List[Dict[str, Any]]:
+    def parse_section(self, df: pd.DataFrame, section_name: str, approx_start: int, all_sections: List[str], multi_row: bool = False) -> List[Dict[str, Any]]:
         """
         Parses the section DataFrame into a list of structured records.
 
@@ -114,6 +114,7 @@ class SectionParser:
         df (pd.DataFrame): The full DataFrame.
         section_name (str): The name of the section to parse.
         approx_start (int): Approximate row to start searching for the section.
+        all_sections (List[str]): List of all possible section names.
         multi_row (bool): Whether records span multiple rows.
 
         Returns:
@@ -135,13 +136,13 @@ class SectionParser:
 
         # Find the end row (next section or end)
         end_row = len(df)
-        markers = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
+        markers = [s for s in all_sections if s != section_name]
         for idx in range(start_row + 1, len(df)):
             row = df.iloc[idx]
             for cell in row:
                 if pd.notna(cell):
                     for marker in markers:
-                        if marker in str(cell) and marker != section_name:
+                        if marker in str(cell):
                             end_row = idx
                             break
             if end_row != len(df):
@@ -235,9 +236,10 @@ class ExcelImporter:
             self.child_name = self.df.iloc[1, 3] if pd.notna(self.df.iloc[1, 3]) else None
 
         # Parse sections by providing whole data and approximate starts
-        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 3, multi_row=False)
-        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 22, multi_row=False)
-        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 39, multi_row=True)
+        all_sections = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
+        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 3, all_sections, multi_row=False)
+        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 22, all_sections, multi_row=False)
+        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 39, all_sections, multi_row=True)
 
     def get_child_name(self) -> Optional[str]:
         """
