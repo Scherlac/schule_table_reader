@@ -106,21 +106,53 @@ class SectionParser:
     def __init__(self) -> None:
         self.record_parser = RecordParser()
 
-    def parse_section(self, df: pd.DataFrame, multi_row: bool = False) -> List[Dict[str, Any]]:
+    def parse_section(self, df: pd.DataFrame, section_name: str, approx_start: int, multi_row: bool = False) -> List[Dict[str, Any]]:
         """
         Parses the section DataFrame into a list of structured records.
 
         Parameters:
-        df (pd.DataFrame): The section DataFrame.
-        multi_row (bool): Whether records span multiple rows (name in one, items in next).
+        df (pd.DataFrame): The full DataFrame.
+        section_name (str): The name of the section to parse.
+        approx_start (int): Approximate row to start searching for the section.
+        multi_row (bool): Whether records span multiple rows.
 
         Returns:
         list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
         """
+        # Find the exact start row
+        start_row = None
+        for idx in range(approx_start, len(df)):
+            row = df.iloc[idx]
+            for cell in row:
+                if pd.notna(cell) and section_name in str(cell):
+                    start_row = idx
+                    break
+            if start_row is not None:
+                break
+
+        if start_row is None:
+            return []
+
+        # Find the end row (next section or end)
+        end_row = len(df)
+        markers = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
+        for idx in range(start_row + 1, len(df)):
+            row = df.iloc[idx]
+            for cell in row:
+                if pd.notna(cell):
+                    for marker in markers:
+                        if marker in str(cell) and marker != section_name:
+                            end_row = idx
+                            break
+            if end_row != len(df):
+                break
+
+        section_df = df.iloc[start_row:end_row]
+
         if multi_row:
-            return self._parse_multi_row_section(df)
+            return self._parse_multi_row_section(section_df)
         else:
-            return self._parse_single_row_section(df)
+            return self._parse_single_row_section(section_df)
 
     def _parse_single_row_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
         """
@@ -202,10 +234,10 @@ class ExcelImporter:
         if len(self.df) > 1 and len(self.df.columns) > 3:
             self.child_name = self.df.iloc[1, 3] if pd.notna(self.df.iloc[1, 3]) else None
 
-        # Hardcoded section ranges based on file structure
-        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df.iloc[3:22], multi_row=False)
-        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df.iloc[22:39], multi_row=False)
-        self.parsed_sections['KATT'] = self.parser.parse_section(self.df.iloc[39:], multi_row=True)
+        # Parse sections by providing whole data and approximate starts
+        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 3, multi_row=False)
+        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 22, multi_row=False)
+        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 39, multi_row=True)
 
     def get_child_name(self) -> Optional[str]:
         """
