@@ -2,6 +2,7 @@
 # preprocessing excel file to read relevant data the a structured format
 import pandas as pd
 import re
+import json
 from typing import List, Dict, Tuple, Optional, Any
 
 
@@ -207,11 +208,23 @@ class ExcelImporter:
         if len(self.df) > 1 and len(self.df.columns) > 3:
             self.child_name = self.df.iloc[1, 3] if pd.notna(self.df.iloc[1, 3]) else None
 
-        # Parse sections by providing whole data and approximate starts
-        all_sections = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
-        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 0, all_sections, multi_row=False, expected_records=11, expected_questions=[0,4,4,8,9,6,6,6,10,4,1])
-        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 15, all_sections, multi_row=False, expected_records=14, expected_questions=[0,0,6,6,6,0,6,6,6,0,6,6,6,6])
-        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 25, all_sections, multi_row=True, expected_records=7, expected_questions=[0,14,8,12,6,10,8])
+        # Load section configuration from JSON
+        with open('sections_config.json', 'r', encoding='utf-8') as f:
+            sections_config = json.load(f)
+
+        all_sections = list(sections_config.keys())
+
+        # Parse sections using configuration
+        for section_name, config in sections_config.items():
+            self.parsed_sections[section_name] = self.parser.parse_section(
+                self.df,
+                section_name,
+                config['approx_start'],
+                all_sections,
+                multi_row=config['multi_row'],
+                expected_records=config.get('expected_records'),
+                expected_questions=config.get('expected_questions')
+            )
 
     def get_child_name(self) -> Optional[str]:
         """

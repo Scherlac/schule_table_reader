@@ -1,0 +1,20 @@
+{
+    "TANSTÍLUS": {
+        "approx_start": 0,
+        "multi_row": false,
+        "expected_records": 11,
+        "expected_questions": [0, 4, 4, 8, 9, 6, 6, 6, 10, 4, 1]
+    },
+    "MOTIVÁCIÓ": {
+        "approx_start": 15,
+        "multi_row": false,
+        "expected_records": 14,
+        "expected_questions": [0, 0, 6, 6, 6, 0, 6, 6, 6, 0, 6, 6, 6, 6]
+    },
+    "KATT": {
+        "approx_start": 25,
+        "multi_row": true,
+        "expected_records": 7,
+        "expected_questions": [0, 14, 8, 12, 6, 10, 8]
+    }
+}
