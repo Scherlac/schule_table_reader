@@ -94,14 +94,9 @@ class RecordParser:
 
     def _parse_item_string(self, s: str) -> Tuple[str, List[int], List[str]]:
         """
-        Parses a string to extract name, item numbers, and their modifiers using a single regex pattern.
+        Parses a string to extract name, item numbers, and their modifiers.
 
-        This method uses a single regex with capture groups to find all item numbers and modifiers,
-        then extracts the name by removing the matched patterns. It handles all formats uniformly.
-
-        Regex pattern (multiline with named groups for maintainability):
-        (?P<num>\d+)     # Capture group for item number (one or more digits)
-        (?P<mod>[a-zA-Z]*) # Capture group for optional modifier (zero or more letters)
+        Handles different formats: space-separated, comma-separated, semicolon-separated.
 
         Parameters:
         s (str): The string containing the name and item numbers.
@@ -109,12 +104,42 @@ class RecordParser:
         Returns:
         tuple: (name str, list of ints for items, list of strs for modifiers)
         """
-        pattern = r'(?P<num>\d+)(?P<mod>[a-zA-Z]*)'
-        matches = re.findall(pattern, s)
-        name = re.sub(pattern, '', s).strip()
-        items = [int(match[0]) for match in matches]
-        modifiers = [match[1] for match in matches]
-        return name, items, modifiers
+        if ';' in s:
+            name = re.sub(r'\d+[a-zA-Z]*', '', s).strip()
+            parts = []
+            for x in s.split(';'):
+                x = x.strip()
+                if x:
+                    if ',' in x:
+                        parts.extend([p.strip() for p in x.split(',') if p.strip()])
+                    else:
+                        parts.append(x)
+            items = []
+            modifiers = []
+            for p in parts:
+                match = re.match(r'(\d+)([a-zA-Z]*)', p)
+                if match:
+                    items.append(int(match.group(1)))
+                    modifiers.append(match.group(2))
+            return name, items, modifiers
+        else:
+            parts = s.split()
+            item_parts = []
+            name_parts = []
+            for p in parts:
+                if re.match(r'\d+[a-zA-Z]*', p):
+                    item_parts.append(p)
+                else:
+                    name_parts.append(p)
+            name = ' '.join(name_parts)
+            items = []
+            modifiers = []
+            for p in item_parts:
+                match = re.match(r'(\d+)([a-zA-Z]*)', p)
+                if match:
+                    items.append(int(match.group(1)))
+                    modifiers.append(match.group(2))
+            return name, items, modifiers
 
 
 class SectionParser:
