@@ -28,7 +28,7 @@ def test_importer():
     for section_name, parsed_data in parsed_sections.items():
         print(f"\n{section_name} Parsed:")
         for label, data in parsed_data.items():
-            print(f"  {label}: Items {data['items']}, Scores {data['scores']}")
+            print(f"  {label}: Items {data['items']}, Modifiers {data['modifiers']}, Scores {data['scores']}")
 
     # Optionally, print full data summary
     full_data = importer.get_full_data()
