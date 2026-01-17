@@ -28,6 +28,19 @@ def test_importer():
     for section_name, records in parsed_sections.items():
         print(f"{section_name}: {len(records)} records")
 
+    print("\nScore Statistics per Record:")
+    for section_name, records in parsed_sections.items():
+        print(f"\n{section_name}:")
+        for i, record in enumerate(records):
+            scores = record['scores']
+            if scores:
+                count = len(scores)
+                total = sum(scores)
+                mean = total / count if count > 0 else 0
+                print(f"  Record {i+1} ({record['name']}): Count={count}, Sum={total}, Mean={mean:.2f}")
+            else:
+                print(f"  Record {i+1} ({record['name']}): No scores")
+
     # Optionally, print full data summary
     full_data = importer.get_full_data()
     print(f"\nFull Data Shape: {full_data.shape}")
