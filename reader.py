@@ -64,6 +64,7 @@ class RecordParser:
         tuple: (name str, list of ints for items, list of strs for modifiers)
         """
         if ';' in s:
+            name = ""
             parts = []
             for x in s.split(';'):
                 x = x.strip()
@@ -79,12 +80,6 @@ class RecordParser:
                 if match:
                     items.append(int(match.group(1)))
                     modifiers.append(match.group(2))
-            name = s
-            for p in parts:
-                name = name.replace(p, '')
-            name = name.strip()
-            if name.endswith(';'):
-                name = name[:-1].strip()
             return name, items, modifiers
         else:
             parts = s.split()
