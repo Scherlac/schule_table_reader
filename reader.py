@@ -2,9 +2,10 @@
 # preprocessing excel file to read relevant data the a structured format
 import pandas as pd
 import re
+from typing import List, Dict, Tuple, Optional, Any
 
 
-def read_excel_file(file_path):
+def read_excel_file(file_path: str) -> pd.DataFrame:
     """
     Reads an Excel file and returns its contents as a pandas DataFrame.
 
@@ -27,7 +28,7 @@ class ExcelImporter:
     Importer class to capture and structure the content of the Excel file.
     """
 
-    def __init__(self, file_path):
+    def __init__(self, file_path: str) -> None:
         """
         Initializes the importer by reading the Excel file.
 
@@ -44,7 +45,7 @@ class ExcelImporter:
             print(f"An error occurred while importing the Excel file: {e}")
             self.df = None
 
-    def _extract_data(self):
+    def _extract_data(self) -> None:
         """
         Extracts the child name and sections from the DataFrame.
         """
@@ -73,7 +74,7 @@ class ExcelImporter:
             self.sections[marker] = section_data
             self.parsed_sections[marker] = self._parse_section(section_data)
 
-    def _parse_section(self, df):
+    def _parse_section(self, df: pd.DataFrame) -> List[Dict]:
         """
         Parses the section DataFrame into a list of structured records.
 
@@ -97,7 +98,7 @@ class ExcelImporter:
                 })
         return records
 
-    def _parse_item_string(self, s):
+    def _parse_item_string(self, s: str) -> Tuple[str, List[int], List[str]]:
         """
         Parses a string to extract name, item numbers, and their modifiers.
 
@@ -146,7 +147,7 @@ class ExcelImporter:
             name = ' '.join(name.split())
             return name, items, modifiers
 
-    def get_child_name(self):
+    def get_child_name(self) -> Optional[str]:
         """
         Returns the child name.
 
@@ -155,7 +156,7 @@ class ExcelImporter:
         """
         return self.child_name
 
-    def get_sections(self):
+    def get_sections(self) -> Dict[str, pd.DataFrame]:
         """
         Returns the sections data.
 
@@ -164,7 +165,7 @@ class ExcelImporter:
         """
         return self.sections
 
-    def get_parsed_sections(self):
+    def get_parsed_sections(self) -> Dict[str, List[Dict[str, Any]]]:
         """
         Returns the parsed sections data.
 
@@ -173,7 +174,7 @@ class ExcelImporter:
         """
         return self.parsed_sections
 
-    def get_full_data(self):
+    def get_full_data(self) -> pd.DataFrame:
         """
         Returns the full DataFrame.
 
