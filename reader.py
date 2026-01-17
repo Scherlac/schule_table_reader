@@ -23,37 +23,35 @@ def read_excel_file(file_path: str) -> pd.DataFrame:
         return None
 
 
-class SectionParser:
+class RecordParser:
     """
-    Parser class for extracting structured data from Excel sections.
+    Parser class for extracting structured data from individual Excel rows.
     """
 
     def __init__(self) -> None:
         pass
 
-    def parse_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+    def parse_record(self, row) -> Optional[Dict[str, Any]]:
         """
-        Parses the section DataFrame into a list of structured records.
+        Parses a single row into a structured record.
 
         Parameters:
-        df (pd.DataFrame): The section DataFrame.
+        row: The DataFrame row.
 
         Returns:
-        list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
+        dict: Dictionary with 'name', 'items', 'modifiers', 'scores' or None if no label.
         """
-        records = []
-        for idx, row in df.iterrows():
-            label = row[3] if len(row) > 3 and pd.notna(row[3]) else None
-            if label:
-                name, items, modifiers = self._parse_item_string(str(label))
-                scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
-                records.append({
-                    'name': name,
-                    'items': items,
-                    'modifiers': modifiers,
-                    'scores': scores
-                })
-        return records
+        label = row[3] if len(row) > 3 and pd.notna(row[3]) else None
+        if label:
+            name, items, modifiers = self._parse_item_string(str(label))
+            scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
+            return {
+                'name': name,
+                'items': items,
+                'modifiers': modifiers,
+                'scores': scores
+            }
+        return None
 
     def _parse_item_string(self, s: str) -> Tuple[str, List[int], List[str]]:
         """
@@ -103,6 +101,55 @@ class SectionParser:
                 name = name.replace(p, '')
             name = ' '.join(name.split())
             return name, items, modifiers
+
+
+class SectionParser:
+    """
+    Parser class for extracting structured data from Excel sections.
+    """
+
+    def __init__(self) -> None:
+        self.record_parser = RecordParser()
+
+    def parse_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """
+        Parses the section DataFrame into a list of structured records.
+
+        Parameters:
+        df (pd.DataFrame): The section DataFrame.
+
+        Returns:
+        list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
+        """
+        records = []
+        pending_name = None
+        for idx, row in df.iterrows():
+            record = self.record_parser.parse_record(row)
+            if record:
+                if record['items']:
+                    if pending_name and not record['name']:
+                        record['name'] = pending_name
+                        pending_name = None
+                    if record['name']:
+                        records.append(record)
+                else:
+                    if record['name']:
+                        if pending_name:
+                            records.append({
+                                'name': pending_name,
+                                'items': [],
+                                'modifiers': [],
+                                'scores': []
+                            })
+                        pending_name = record['name']
+        if pending_name:
+            records.append({
+                'name': pending_name,
+                'items': [],
+                'modifiers': [],
+                'scores': []
+            })
+        return records
 
 
 class ExcelImporter:
