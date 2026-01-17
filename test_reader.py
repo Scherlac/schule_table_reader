@@ -25,10 +25,10 @@ def test_importer():
     # Get and print parsed sections
     parsed_sections = importer.get_parsed_sections()
     print("\nParsed Sections:")
-    for section_name, parsed_data in parsed_sections.items():
-        print(f"\n{section_name} Parsed:")
-        for label, data in parsed_data.items():
-            print(f"  {label}: Items {data['items']}, Modifiers {data['modifiers']}, Scores {data['scores']}")
+    for section_name, records in parsed_sections.items():
+        print(f"\n{section_name} Parsed (first 3 records):")
+        for record in records[:3]:
+            print(f"  Name: {record['name']}, Items: {record['items']}, Modifiers: {record['modifiers']}, Scores: {record['scores']}")
 
     # Optionally, print full data summary
     full_data = importer.get_full_data()

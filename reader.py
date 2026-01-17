@@ -75,32 +75,37 @@ class ExcelImporter:
 
     def _parse_section(self, df):
         """
-        Parses the section DataFrame into structured data with items, modifiers, and scores.
+        Parses the section DataFrame into a list of structured records.
 
         Parameters:
         df (pd.DataFrame): The section DataFrame.
 
         Returns:
-        dict: Dictionary with labels as keys and {'items': list of ints, 'modifiers': list of strs, 'scores': list of floats} as values.
+        list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
         """
-        parsed = {}
+        records = []
         for idx, row in df.iterrows():
             label = row[3] if len(row) > 3 and pd.notna(row[3]) else None
             if label:
-                items, modifiers = self._parse_item_string(str(label))
+                name, items, modifiers = self._parse_item_string(str(label))
                 scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
-                parsed[str(label)] = {'items': items, 'modifiers': modifiers, 'scores': scores}
-        return parsed
+                records.append({
+                    'name': name,
+                    'items': items,
+                    'modifiers': modifiers,
+                    'scores': scores
+                })
+        return records
 
     def _parse_item_string(self, s):
         """
-        Parses a string to extract item numbers and their modifiers.
+        Parses a string to extract name, item numbers, and their modifiers.
 
         Parameters:
-        s (str): The string containing item numbers.
+        s (str): The string containing the name and item numbers.
 
         Returns:
-        tuple: (list of ints for items, list of strs for modifiers)
+        tuple: (name str, list of ints for items, list of strs for modifiers)
         """
         if ';' in s:
             parts = []
@@ -118,17 +123,28 @@ class ExcelImporter:
                 if match:
                     items.append(int(match.group(1)))
                     modifiers.append(match.group(2))
-            return items, modifiers
+            name = s
+            for p in parts:
+                name = name.replace(p, '')
+            name = name.strip()
+            if name.endswith(';'):
+                name = name[:-1].strip()
+            return name, items, modifiers
         else:
-            matches = re.findall(r'\d+[a-zA-Z]*', s)
+            parts = s.split()
+            item_parts = [p for p in parts if re.match(r'\d', p)]
             items = []
             modifiers = []
-            for m in matches:
-                match = re.match(r'(\d+)([a-zA-Z]*)', m)
+            for p in item_parts:
+                match = re.match(r'(\d+)([a-zA-Z]*)', p)
                 if match:
                     items.append(int(match.group(1)))
                     modifiers.append(match.group(2))
-            return items, modifiers
+            name = s
+            for p in item_parts:
+                name = name.replace(p, '')
+            name = ' '.join(name.split())
+            return name, items, modifiers
 
     def get_child_name(self):
         """
