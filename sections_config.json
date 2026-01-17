@@ -2,19 +2,25 @@
     "TANSTÍLUS": {
         "approx_start": 0,
         "multi_row": false,
-        "expected_records": 11,
-        "expected_questions": [0, 4, 4, 8, 9, 6, 6, 6, 10, 4, 1]
+        "expected_records": 9,
+        "expected_questions": [4, 4, 8, 9, 6, 6, 6, 10, 4]
+    },
+    "RAVENS": {
+        "approx_start": 14,
+        "multi_row": false,
+        "expected_records": 0,
+        "expected_questions": []
     },
     "MOTIVÁCIÓ": {
-        "approx_start": 15,
+        "approx_start": 18,
         "multi_row": false,
-        "expected_records": 14,
-        "expected_questions": [0, 0, 6, 6, 6, 0, 6, 6, 6, 0, 6, 6, 6, 6]
+        "expected_records": 10,
+        "expected_questions": [6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
     },
     "KATT": {
         "approx_start": 25,
         "multi_row": true,
-        "expected_records": 7,
-        "expected_questions": [0, 14, 8, 12, 6, 10, 8]
+        "expected_records": 6,
+        "expected_questions": [14, 8, 12, 6, 10, 8]
     }
 }
