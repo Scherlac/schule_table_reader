@@ -171,33 +171,25 @@ class SectionParser:
         Returns:
         list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
         """
-        # Find the exact start row
+        # Find the exact start and end rows
         start_row = None
+        end_row = len(df)
+        markers = [s for s in all_sections if s != section_name]
         for idx in range(approx_start, len(df)):
             row = df.iloc[idx]
             for cell in row:
-                if pd.notna(cell) and section_name in str(cell):
-                    start_row = idx
-                    break
-            if start_row is not None:
+                if pd.notna(cell):
+                    cell_str = str(cell)
+                    if start_row is None and section_name in cell_str:
+                        start_row = idx
+                    elif start_row is not None and any(marker in cell_str for marker in markers):
+                        end_row = idx
+                        break
+            if end_row != len(df):
                 break
 
         if start_row is None:
             return []
-
-        # Find the end row (next section or end)
-        end_row = len(df)
-        markers = [s for s in all_sections if s != section_name]
-        for idx in range(start_row + 1, len(df)):
-            row = df.iloc[idx]
-            for cell in row:
-                if pd.notna(cell):
-                    for marker in markers:
-                        if marker in str(cell):
-                            end_row = idx
-                            break
-            if end_row != len(df):
-                break
 
         section_df = df.iloc[start_row:end_row]
 
