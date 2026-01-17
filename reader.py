@@ -25,11 +25,62 @@ def read_excel_file(file_path: str) -> pd.DataFrame:
 
 class RecordParser:
     """
-    Parser class for extracting structured data from individual Excel rows.
+    Parser class for extracting structured data from individual Excel rows and sections.
     """
 
     def __init__(self) -> None:
         pass
+
+    def parse_records(self, df: pd.DataFrame, mode: str) -> List[Dict[str, Any]]:
+        """
+        Parses the DataFrame into a list of structured records, handling single or multi-row records.
+
+        Parameters:
+        df (pd.DataFrame): The section DataFrame.
+        mode (str): 'single' for single-row records, 'multi' for multi-row records.
+
+        Returns:
+        list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
+        """
+        if mode == 'single':
+            records = []
+            for idx, row in df.iterrows():
+                record = self.parse_record(row)
+                if record and record['name']:
+                    records.append(record)
+            return records
+        elif mode == 'multi':
+            records = []
+            pending_name = None
+            for idx, row in df.iterrows():
+                record = self.parse_record(row)
+                if record:
+                    if record['items']:
+                        if pending_name and not record['name']:
+                            record['name'] = pending_name
+                            pending_name = None
+                        if record['name']:
+                            records.append(record)
+                    else:
+                        if record['name']:
+                            if pending_name:
+                                records.append({
+                                    'name': pending_name,
+                                    'items': [],
+                                    'modifiers': [],
+                                    'scores': []
+                                })
+                            pending_name = record['name']
+            if pending_name:
+                records.append({
+                    'name': pending_name,
+                    'items': [],
+                    'modifiers': [],
+                    'scores': []
+                })
+            return records
+        else:
+            return []
 
     def parse_record(self, row) -> Optional[Dict[str, Any]]:
         """
@@ -150,55 +201,8 @@ class SectionParser:
 
         section_df = df.iloc[start_row:end_row]
 
-        if multi_row:
-            return self._parse_multi_row_section(section_df)
-        else:
-            return self._parse_single_row_section(section_df)
-
-    def _parse_single_row_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """
-        Parses sections where each record is in a single row.
-        """
-        records = []
-        for idx, row in df.iterrows():
-            record = self.record_parser.parse_record(row)
-            if record and record['name']:
-                records.append(record)
-        return records
-
-    def _parse_multi_row_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """
-        Parses sections where records may span multiple rows.
-        """
-        records = []
-        pending_name = None
-        for idx, row in df.iterrows():
-            record = self.record_parser.parse_record(row)
-            if record:
-                if record['items']:
-                    if pending_name and not record['name']:
-                        record['name'] = pending_name
-                        pending_name = None
-                    if record['name']:
-                        records.append(record)
-                else:
-                    if record['name']:
-                        if pending_name:
-                            records.append({
-                                'name': pending_name,
-                                'items': [],
-                                'modifiers': [],
-                                'scores': []
-                            })
-                        pending_name = record['name']
-        if pending_name:
-            records.append({
-                'name': pending_name,
-                'items': [],
-                'modifiers': [],
-                'scores': []
-            })
-        return records
+        mode = 'multi' if multi_row else 'single'
+        return self.record_parser.parse_records(section_df, mode)
 
 
 class ExcelImporter:
@@ -237,9 +241,9 @@ class ExcelImporter:
 
         # Parse sections by providing whole data and approximate starts
         all_sections = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
-        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 3, all_sections, multi_row=False)
-        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 22, all_sections, multi_row=False)
-        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 39, all_sections, multi_row=True)
+        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 0, all_sections, multi_row=False)
+        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 15, all_sections, multi_row=False)
+        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 35, all_sections, multi_row=True)
 
     def get_child_name(self) -> Optional[str]:
         """
