@@ -5,11 +5,11 @@
         "expected_records": 9,
         "expected_questions": [4, 4, 8, 9, 6, 6, 6, 10, 4]
     },
-    "RAVENS": {
+    "RAVEN": {
         "approx_start": 14,
         "multi_row": false,
-        "expected_records": 0,
-        "expected_questions": []
+        "expected_records": 1,
+        "expected_questions": [1]
     },
     "MOTIVÁCIÓ": {
         "approx_start": 18,

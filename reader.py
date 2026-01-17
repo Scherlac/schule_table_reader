@@ -49,11 +49,11 @@ class RecordParser:
             record = self.parse_record(row)
             if record:
                 if mode == 'single':
-                    if record['name']:
+                    if record['name'] and record['scores']:
                         records.append(record)
                 elif mode == 'multi':
                     if record['name'] and not record['items'] and not record['scores']:
-                        if pending:
+                        if pending and pending.get('scores'):
                             records.append(pending)
                         pending = record
                     elif record['items'] and not record['name'] and not record['scores']:
