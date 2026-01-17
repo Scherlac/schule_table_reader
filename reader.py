@@ -124,7 +124,7 @@ class SectionParser:
     def __init__(self) -> None:
         self.record_parser = RecordParser()
 
-    def parse_section(self, df: pd.DataFrame, section_name: str, approx_start: int, all_sections: List[str], multi_row: bool = False) -> List[Dict[str, Any]]:
+    def parse_section(self, df: pd.DataFrame, section_name: str, approx_start: int, all_sections: List[str], multi_row: bool = False, expected_records: Optional[int] = None, expected_questions: Optional[List[int]] = None) -> List[Dict[str, Any]]:
         """
         Parses the section DataFrame into a list of structured records.
 
@@ -161,7 +161,16 @@ class SectionParser:
         section_df = df.iloc[start_row:end_row]
 
         mode = 'multi' if multi_row else 'single'
-        return self.record_parser.parse_records(section_df, mode)
+        records = self.record_parser.parse_records(section_df, mode)
+        if expected_records is not None and len(records) != expected_records:
+            raise ValueError(f"Section {section_name}: expected {expected_records} records, got {len(records)}")
+        if expected_questions is not None:
+            if len(expected_questions) != len(records):
+                raise ValueError(f"Section {section_name}: expected_questions length {len(expected_questions)} != records {len(records)}")
+            for i, (record, exp) in enumerate(zip(records, expected_questions)):
+                if len(record['scores']) != exp:
+                    raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record['scores'])}")
+        return records
 
 
 class ExcelImporter:
@@ -200,9 +209,9 @@ class ExcelImporter:
 
         # Parse sections by providing whole data and approximate starts
         all_sections = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
-        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 0, all_sections, multi_row=False)
-        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 15, all_sections, multi_row=False)
-        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 25, all_sections, multi_row=True)
+        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 0, all_sections, multi_row=False, expected_records=11, expected_questions=[0,4,4,8,9,6,6,6,10,4,1])
+        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 15, all_sections, multi_row=False, expected_records=14, expected_questions=[0,0,6,6,6,0,6,6,6,0,6,6,6,6])
+        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 25, all_sections, multi_row=True, expected_records=7, expected_questions=[0,14,8,12,6,10,8])
 
     def get_child_name(self) -> Optional[str]:
         """
