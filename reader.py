@@ -51,23 +51,13 @@ class RecordParser:
                     if record['name']:
                         records.append(record)
                 elif mode == 'multi':
-                    if record['items']:
-                        if pending_name and not record['name']:
+                    if record['scores']:
+                        if pending_name:
                             record['name'] = pending_name
                             pending_name = None
-                        if record['name']:
-                            records.append(record)
-                    else:
-                        if record['name']:
-                            if pending_name:
-                                records.append({
-                                    'label': '',
-                                    'name': pending_name,
-                                    'items': [],
-                                    'modifiers': [],
-                                    'scores': []
-                                })
-                            pending_name = record['name']
+                        records.append(record)
+                    elif record['name']:
+                        pending_name = record['name']
         if mode == 'multi' and pending_name:
             records.append({
                 'label': '',
@@ -103,7 +93,14 @@ class RecordParser:
 
     def _parse_item_string(self, s: str) -> Tuple[str, List[int], List[str]]:
         """
-        Parses a string to extract name, item numbers, and their modifiers.
+        Parses a string to extract name, item numbers, and their modifiers using a single regex pattern.
+
+        This method uses a single regex with capture groups to find all item numbers and modifiers,
+        then extracts the name by removing the matched patterns. It handles all formats uniformly.
+
+        Regex pattern (multiline with named groups for maintainability):
+        (?P<num>\d+)     # Capture group for item number (one or more digits)
+        (?P<mod>[a-zA-Z]*) # Capture group for optional modifier (zero or more letters)
 
         Parameters:
         s (str): The string containing the name and item numbers.
@@ -111,39 +108,12 @@ class RecordParser:
         Returns:
         tuple: (name str, list of ints for items, list of strs for modifiers)
         """
-        if ';' in s:
-            name = ""
-            parts = []
-            for x in s.split(';'):
-                x = x.strip()
-                if x:
-                    if ',' in x:
-                        parts.extend([p.strip() for p in x.split(',') if p.strip()])
-                    else:
-                        parts.append(x)
-            items = []
-            modifiers = []
-            for p in parts:
-                match = re.match(r'(\d+)([a-zA-Z]*)', p)
-                if match:
-                    items.append(int(match.group(1)))
-                    modifiers.append(match.group(2))
-            return name, items, modifiers
-        else:
-            parts = s.split()
-            item_parts = [p for p in parts if re.match(r'\d', p)]
-            items = []
-            modifiers = []
-            for p in item_parts:
-                match = re.match(r'(\d+)([a-zA-Z]*)', p)
-                if match:
-                    items.append(int(match.group(1)))
-                    modifiers.append(match.group(2))
-            name = s
-            for p in item_parts:
-                name = name.replace(p, '')
-            name = ' '.join(name.split())
-            return name, items, modifiers
+        pattern = r'(?P<num>\d+)(?P<mod>[a-zA-Z]*)'
+        matches = re.findall(pattern, s)
+        name = re.sub(pattern, '', s).strip()
+        items = [int(match[0]) for match in matches]
+        modifiers = [match[1] for match in matches]
+        return name, items, modifiers
 
 
 class SectionParser:
