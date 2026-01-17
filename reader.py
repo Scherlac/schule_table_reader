@@ -42,19 +42,15 @@ class RecordParser:
         Returns:
         list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
         """
-        if mode == 'single':
-            records = []
-            for idx, row in df.iterrows():
-                record = self.parse_record(row)
-                if record and record['name']:
-                    records.append(record)
-            return records
-        elif mode == 'multi':
-            records = []
-            pending_name = None
-            for idx, row in df.iterrows():
-                record = self.parse_record(row)
-                if record:
+        records = []
+        pending_name = None
+        for idx, row in df.iterrows():
+            record = self.parse_record(row)
+            if record:
+                if mode == 'single':
+                    if record['name']:
+                        records.append(record)
+                elif mode == 'multi':
                     if record['items']:
                         if pending_name and not record['name']:
                             record['name'] = pending_name
@@ -71,16 +67,14 @@ class RecordParser:
                                     'scores': []
                                 })
                             pending_name = record['name']
-            if pending_name:
-                records.append({
-                    'name': pending_name,
-                    'items': [],
-                    'modifiers': [],
-                    'scores': []
-                })
-            return records
-        else:
-            return []
+        if mode == 'multi' and pending_name:
+            records.append({
+                'name': pending_name,
+                'items': [],
+                'modifiers': [],
+                'scores': []
+            })
+        return records
 
     def parse_record(self, row) -> Optional[Dict[str, Any]]:
         """
