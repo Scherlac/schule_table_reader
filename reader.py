@@ -1,6 +1,7 @@
 
 # preprocessing excel file to read relevant data the a structured format
 import pandas as pd
+import re
 
 
 def read_excel_file(file_path):
@@ -36,6 +37,7 @@ class ExcelImporter:
         try:
             self.df = pd.read_excel(file_path, header=None)
             self.sections = {}
+            self.parsed_sections = {}
             self.child_name = None
             self._extract_data()
         except Exception as e:
@@ -69,6 +71,41 @@ class ExcelImporter:
             end_row = sorted_markers[i+1][1] if i+1 < len(sorted_markers) else len(self.df)
             section_data = self.df.iloc[start_row:end_row]
             self.sections[marker] = section_data
+            self.parsed_sections[marker] = self._parse_section(section_data)
+
+    def _parse_section(self, df):
+        """
+        Parses the section DataFrame into structured data with items and scores.
+
+        Parameters:
+        df (pd.DataFrame): The section DataFrame.
+
+        Returns:
+        dict: Dictionary with labels as keys and {'items': list, 'scores': list} as values.
+        """
+        parsed = {}
+        for idx, row in df.iterrows():
+            label = row[3] if len(row) > 3 and pd.notna(row[3]) else None
+            if label:
+                items = self._parse_item_string(str(label))
+                scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
+                parsed[str(label)] = {'items': items, 'scores': scores}
+        return parsed
+
+    def _parse_item_string(self, s):
+        """
+        Parses a string to extract item numbers.
+
+        Parameters:
+        s (str): The string containing item numbers.
+
+        Returns:
+        list: List of integers representing item numbers.
+        """
+        if ';' in s:
+            return [int(x.strip()) for x in s.split(';') if x.strip().isdigit()]
+        else:
+            return [int(x) for x in re.findall(r'\d+', s)]
 
     def get_child_name(self):
         """
@@ -87,6 +124,15 @@ class ExcelImporter:
         dict: Dictionary with section names as keys and DataFrames as values.
         """
         return self.sections
+
+    def get_parsed_sections(self):
+        """
+        Returns the parsed sections data.
+
+        Returns:
+        dict: Dictionary with section names as keys and parsed data as values.
+        """
+        return self.parsed_sections
 
     def get_full_data(self):
         """

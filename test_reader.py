@@ -22,12 +22,13 @@ def test_importer():
     child_name = importer.get_child_name()
     print(f"Child Name: {child_name}")
 
-    # Get and print sections
-    sections = importer.get_sections()
-    print("\nSections found:")
-    for section_name, section_df in sections.items():
-        print(f"\n{section_name} Section:")
-        print(section_df.to_string(index=False))
+    # Get and print parsed sections
+    parsed_sections = importer.get_parsed_sections()
+    print("\nParsed Sections:")
+    for section_name, parsed_data in parsed_sections.items():
+        print(f"\n{section_name} Parsed:")
+        for label, data in parsed_data.items():
+            print(f"  {label}: Items {data['items']}, Scores {data['scores']}")
 
     # Optionally, print full data summary
     full_data = importer.get_full_data()
