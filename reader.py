@@ -106,15 +106,36 @@ class SectionParser:
     def __init__(self) -> None:
         self.record_parser = RecordParser()
 
-    def parse_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+    def parse_section(self, df: pd.DataFrame, multi_row: bool = False) -> List[Dict[str, Any]]:
         """
         Parses the section DataFrame into a list of structured records.
 
         Parameters:
         df (pd.DataFrame): The section DataFrame.
+        multi_row (bool): Whether records span multiple rows (name in one, items in next).
 
         Returns:
         list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
+        """
+        if multi_row:
+            return self._parse_multi_row_section(df)
+        else:
+            return self._parse_single_row_section(df)
+
+    def _parse_single_row_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """
+        Parses sections where each record is in a single row.
+        """
+        records = []
+        for idx, row in df.iterrows():
+            record = self.record_parser.parse_record(row)
+            if record and record['name']:
+                records.append(record)
+        return records
+
+    def _parse_multi_row_section(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """
+        Parses sections where records may span multiple rows.
         """
         records = []
         pending_name = None
@@ -181,23 +202,10 @@ class ExcelImporter:
         if len(self.df) > 1 and len(self.df.columns) > 3:
             self.child_name = self.df.iloc[1, 3] if pd.notna(self.df.iloc[1, 3]) else None
 
-        # Define section markers and their rows
-        markers = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
-        marker_rows = {}
-        for idx, row in self.df.iterrows():
-            for cell in row:
-                if pd.notna(cell):
-                    for marker in markers:
-                        if marker in str(cell):
-                            marker_rows[marker] = idx
-
-        # Extract sections based on markers
-        sorted_markers = sorted(marker_rows.items(), key=lambda x: x[1])
-        for i, (marker, start_row) in enumerate(sorted_markers):
-            end_row = sorted_markers[i+1][1] if i+1 < len(sorted_markers) else len(self.df)
-            section_data = self.df.iloc[start_row:end_row]
-            self.sections[marker] = section_data
-            self.parsed_sections[marker] = self.parser.parse_section(section_data)
+        # Hardcoded section ranges based on file structure
+        self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df.iloc[3:22], multi_row=False)
+        self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df.iloc[22:39], multi_row=False)
+        self.parsed_sections['KATT'] = self.parser.parse_section(self.df.iloc[39:], multi_row=True)
 
     def get_child_name(self) -> Optional[str]:
         """
