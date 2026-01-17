@@ -43,7 +43,7 @@ class RecordParser:
         list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
         """
         records = []
-        pending_name = None
+        pending = None
         for idx, row in df.iterrows():
             record = self.parse_record(row)
             if record:
@@ -51,21 +51,21 @@ class RecordParser:
                     if record['name']:
                         records.append(record)
                 elif mode == 'multi':
-                    if record['scores']:
-                        if pending_name:
-                            record['name'] = pending_name
-                            pending_name = None
-                        records.append(record)
-                    elif record['name']:
-                        pending_name = record['name']
-        if mode == 'multi' and pending_name:
-            records.append({
-                'label': '',
-                'name': pending_name,
-                'items': [],
-                'modifiers': [],
-                'scores': []
-            })
+                    if record['name'] and not record['items'] and not record['scores']:
+                        if pending:
+                            records.append(pending)
+                        pending = record
+                    elif record['items'] and not record['name'] and not record['scores']:
+                        if pending:
+                            pending['items'] = record['items']
+                            pending['modifiers'] = record['modifiers']
+                    elif record['scores']:
+                        if pending:
+                            pending['scores'] = record['scores']
+                            records.append(pending)
+                            pending = None
+        if mode == 'multi' and pending:
+            records.append(pending)
         return records
 
     def parse_record(self, row) -> Optional[Dict[str, Any]]:
@@ -202,7 +202,7 @@ class ExcelImporter:
         all_sections = ['TANSTÍLUS', 'MOTIVÁCIÓ', 'KATT']
         self.parsed_sections['TANSTÍLUS'] = self.parser.parse_section(self.df, 'TANSTÍLUS', 0, all_sections, multi_row=False)
         self.parsed_sections['MOTIVÁCIÓ'] = self.parser.parse_section(self.df, 'MOTIVÁCIÓ', 15, all_sections, multi_row=False)
-        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 35, all_sections, multi_row=True)
+        self.parsed_sections['KATT'] = self.parser.parse_section(self.df, 'KATT', 25, all_sections, multi_row=True)
 
     def get_child_name(self) -> Optional[str]:
         """
