@@ -4,6 +4,18 @@ import pandas as pd
 import re
 import json
 from typing import List, Dict, Tuple, Optional, Any
+from pydantic import BaseModel
+
+
+class SectionDetails(BaseModel):
+    selection_df: Any  # pd.DataFrame
+    start_row: int
+    end_row: int
+
+
+class SectionResult(BaseModel):
+    details: SectionDetails
+    records: List[Dict[str, Any]]
 
 
 class RecordParser:
@@ -134,9 +146,9 @@ class SectionParser:
             all_sections: List[str], 
             multi_row: bool = False, 
             expected_records: Optional[int] = None, 
-            expected_questions: Optional[List[int]] = None) -> List[Dict[str, Any]]:
+            expected_questions: Optional[List[int]] = None) -> SectionResult:
         """
-        Parses the section DataFrame into a list of structured records.
+        Parses the section DataFrame into a structured result with details and records.
 
         Parameters:
         df (pd.DataFrame): The full DataFrame.
@@ -146,7 +158,7 @@ class SectionParser:
         multi_row (bool): Whether records span multiple rows.
 
         Returns:
-        list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
+        SectionResult: Object containing section details and list of records.
         """
         # Find the exact start and end rows
         start_row = None
@@ -167,7 +179,10 @@ class SectionParser:
                 break
 
         if start_row is None:
-            return []
+            return SectionResult(
+                details=SectionDetails(selection_df=pd.DataFrame(), start_row=-1, end_row=-1),
+                records=[]
+            )
 
         section_df = df.iloc[start_row:end_row]
 
@@ -181,7 +196,10 @@ class SectionParser:
             for i, (record, exp) in enumerate(zip(records, expected_questions)):
                 if len(record['scores']) != exp:
                     raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record['scores'])}")
-        return records
+        return SectionResult(
+            details=SectionDetails(selection_df=section_df, start_row=start_row, end_row=end_row),
+            records=records
+        )
 
 
 class ExcelImporter:
@@ -255,7 +273,7 @@ class ExcelImporter:
         """
         return self.sections
 
-    def get_parsed_sections(self) -> Dict[str, List[Dict[str, Any]]]:
+    def get_parsed_sections(self) -> Dict[str, SectionResult]:
         """
         Returns the parsed sections data.
 
@@ -279,13 +297,13 @@ class ExcelImporter:
         # Get parsed sections
         parsed_sections = self.get_parsed_sections()
         print("\nRecord Counts per Section:")
-        for section_name, records in parsed_sections.items():
-            print(f"{section_name}: {len(records)} records")
+        for section_name, section_result in parsed_sections.items():
+            print(f"{section_name}: {len(section_result.records)} records")
 
         print("\nScore Statistics per Record:")
-        for section_name, records in parsed_sections.items():
+        for section_name, section_result in parsed_sections.items():
             print(f"\n{section_name}:")
-            for i, record in enumerate(records):
+            for i, record in enumerate(section_result.records):
                 scores = record['scores']
                 subsection = record.get('subsection')
                 name = record.get('name')
