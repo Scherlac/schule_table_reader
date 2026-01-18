@@ -151,8 +151,10 @@ class SectionParser:
     Parser class for extracting structured data from Excel sections.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, all_sections: List[str], config: SectionConfig) -> None:
         self.record_parser = RecordParser()
+        self.all_sections = all_sections
+        self.config = config
 
     def _validate_section_records(self, section_name: str, records: List[Record], config: SectionConfig) -> None:
         """
@@ -178,17 +180,13 @@ class SectionParser:
     def parse_section(
             self, 
             df: pd.DataFrame, 
-            section_name: str, 
-            config: SectionConfig,
-            all_sections: List[str]) -> SectionResult:
+            section_name: str) -> SectionResult:
         """
         Parses the section DataFrame into a structured result with details and records.
 
         Parameters:
         df (pd.DataFrame): The full DataFrame.
         section_name (str): The name of the section to parse.
-        config (SectionConfig): Configuration for the section parsing.
-        all_sections (List[str]): List of all possible section names.
 
         Returns:
         SectionResult: Object containing section details and list of records.
@@ -197,8 +195,8 @@ class SectionParser:
         start_row = None
         end_row = len(df)
         column_index = -1  # Search all columns
-        markers = [s for s in all_sections if s != section_name]
-        for idx in range(config.approx_start, len(df)):
+        markers = [s for s in self.all_sections if s != section_name]
+        for idx in range(self.config.approx_start, len(df)):
             row = df.iloc[idx]
             for cell in row:
                 if pd.notna(cell):
@@ -219,9 +217,9 @@ class SectionParser:
 
         section_df = df.iloc[start_row:end_row]
 
-        mode = 'multi' if config.multi_row else 'single'
+        mode = 'multi' if self.config.multi_row else 'single'
         records = self.record_parser.parse_records(section_df, section_name, mode)
-        self._validate_section_records(section_name, records, config)
+        self._validate_section_records(section_name, records, self.config)
         return SectionResult(
             details=SectionDetails(selection_df=section_df, start_row=start_row, end_row=end_row),
             records=records
@@ -246,7 +244,6 @@ class ExcelImporter:
             self.sections = {}
             self.parsed_sections = {}
             self.child_name = None
-            self.parser = SectionParser()
             self._extract_data()
         # except Exception as e:
         #     print(f"An error occurred while importing the Excel file: {e}")
@@ -272,11 +269,10 @@ class ExcelImporter:
 
         # Parse sections using configuration
         for section_name, config in sections_config.items():
-            self.parsed_sections[section_name] = self.parser.parse_section(
+            parser = SectionParser(all_sections, config)
+            self.parsed_sections[section_name] = parser.parse_section(
                 self.df,
-                section_name,
-                config,
-                all_sections
+                section_name
             )
 
     def get_child_name(self) -> Optional[str]:
