@@ -22,6 +22,13 @@ class Record(BaseModel):
     subsection: Optional[str] = None
 
 
+class SectionConfig(BaseModel):
+    approx_start: int
+    multi_row: bool
+    expected_records: Optional[int] = None
+    expected_questions: Optional[List[int]] = None
+
+
 class SectionResult(BaseModel):
     details: SectionDetails
     records: List[Record]
@@ -151,20 +158,16 @@ class SectionParser:
             self, 
             df: pd.DataFrame, 
             section_name: str, 
-            approx_start: int, 
-            all_sections: List[str], 
-            multi_row: bool = False, 
-            expected_records: Optional[int] = None, 
-            expected_questions: Optional[List[int]] = None) -> SectionResult:
+            config: SectionConfig,
+            all_sections: List[str]) -> SectionResult:
         """
         Parses the section DataFrame into a structured result with details and records.
 
         Parameters:
         df (pd.DataFrame): The full DataFrame.
         section_name (str): The name of the section to parse.
-        approx_start (int): Approximate row to start searching for the section.
+        config (SectionConfig): Configuration for the section parsing.
         all_sections (List[str]): List of all possible section names.
-        multi_row (bool): Whether records span multiple rows.
 
         Returns:
         SectionResult: Object containing section details and list of records.
@@ -174,7 +177,7 @@ class SectionParser:
         end_row = len(df)
         column_index = -1  # Search all columns
         markers = [s for s in all_sections if s != section_name]
-        for idx in range(approx_start, len(df)):
+        for idx in range(config.approx_start, len(df)):
             row = df.iloc[idx]
             for cell in row:
                 if pd.notna(cell):
@@ -195,14 +198,14 @@ class SectionParser:
 
         section_df = df.iloc[start_row:end_row]
 
-        mode = 'multi' if multi_row else 'single'
+        mode = 'multi' if config.multi_row else 'single'
         records = self.record_parser.parse_records(section_df, section_name, mode)
-        if expected_records is not None and len(records) != expected_records:
-            raise ValueError(f"Section {section_name}: expected {expected_records} records, got {len(records)}")
-        if expected_questions is not None:
-            if len(expected_questions) != len(records):
-                raise ValueError(f"Section {section_name}: expected_questions length {len(expected_questions)} != records {len(records)}")
-            for i, (record, exp) in enumerate(zip(records, expected_questions)):
+        if config.expected_records is not None and len(records) != config.expected_records:
+            raise ValueError(f"Section {section_name}: expected {config.expected_records} records, got {len(records)}")
+        if config.expected_questions is not None:
+            if len(config.expected_questions) != len(records):
+                raise ValueError(f"Section {section_name}: expected_questions length {len(config.expected_questions)} != records {len(records)}")
+            for i, (record, exp) in enumerate(zip(records, config.expected_questions)):
                 if len(record.scores) != exp:
                     raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record.scores)}")
         return SectionResult(
@@ -248,7 +251,8 @@ class ExcelImporter:
 
         # Load section configuration from JSON
         with open('sections_config.json', 'r', encoding='utf-8') as f:
-            sections_config = json.load(f)
+            raw_config = json.load(f)
+            sections_config = {k: SectionConfig.model_validate(v) for k, v in raw_config.items()}
 
         all_sections = list(sections_config.keys())
 
@@ -257,11 +261,8 @@ class ExcelImporter:
             self.parsed_sections[section_name] = self.parser.parse_section(
                 self.df,
                 section_name,
-                config['approx_start'],
-                all_sections,
-                multi_row=config['multi_row'],
-                expected_records=config.get('expected_records'),
-                expected_questions=config.get('expected_questions')
+                config,
+                all_sections
             )
 
     def get_child_name(self) -> Optional[str]:
