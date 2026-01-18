@@ -43,7 +43,13 @@ See proposed alternatives following table:
 | BO           | ...Service or ...Manager      | Business layer service or manager       |
 | DTO          | ...Result                     | Returned by the business layer          |
 | POJO         | (not specified)               | Plain Old Object                        |
-|              | ...Factory                    | Responsible for object creation from various sources |
-|              | ...Manager                    | Coordinates multiple objects or operations |
+| CF           | ...Factory                    | Responsible for object creation from various sources |
+|
+With the use of modern orm libraries and frameworks, some of these patterns may be less relevant, eg. the PO and VO can often be combined into a single model class. In this project we prefer using descriptive names over abbreviations. Also we prefer using only VO instead of PO, DTO and VO. 
 
-With the use of modern orm libraries and frameworks, some of these patterns may be less relevant, eg. the PO and VO can often be combined into a single model class.
+Therefore we use the following naming conventions in this project:
+
+- ...(none): PO, VO and DTO are all represented by a single model class.
+- ...Manager: BO and CF are represented by manager classes that handle business logic and object creation.
+
+
