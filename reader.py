@@ -6,24 +6,6 @@ import json
 from typing import List, Dict, Tuple, Optional, Any
 
 
-def read_excel_file(file_path: str) -> pd.DataFrame:
-    """
-    Reads an Excel file and returns its contents as a pandas DataFrame.
-
-    Parameters:
-    file_path (str): The path to the Excel file.
-
-    Returns:
-    pd.DataFrame: DataFrame containing the data from the Excel file.
-    """
-    try:
-        df = pd.read_excel(file_path)
-        return df
-    except Exception as e:
-        print(f"An error occurred while reading the Excel file: {e}")
-        return None
-
-
 class RecordParser:
     """
     Parser class for extracting structured data from individual Excel rows and sections.
@@ -144,7 +126,15 @@ class SectionParser:
     def __init__(self) -> None:
         self.record_parser = RecordParser()
 
-    def parse_section(self, df: pd.DataFrame, section_name: str, approx_start: int, all_sections: List[str], multi_row: bool = False, expected_records: Optional[int] = None, expected_questions: Optional[List[int]] = None) -> List[Dict[str, Any]]:
+    def parse_section(
+            self, 
+            df: pd.DataFrame, 
+            section_name: str, 
+            approx_start: int, 
+            all_sections: List[str], 
+            multi_row: bool = False, 
+            expected_records: Optional[int] = None, 
+            expected_questions: Optional[List[int]] = None) -> List[Dict[str, Any]]:
         """
         Parses the section DataFrame into a list of structured records.
 
@@ -161,6 +151,7 @@ class SectionParser:
         # Find the exact start and end rows
         start_row = None
         end_row = len(df)
+        column_index = -1  # Search all columns
         markers = [s for s in all_sections if s != section_name]
         for idx in range(approx_start, len(df)):
             row = df.iloc[idx]
@@ -307,19 +298,19 @@ class ExcelImporter:
                 else:
                     print(f"  Record {i+1} ({display_name}): No scores")
 
-        # Full data summary
-        full_data = self.get_full_data()
-        print(f"\nFull Data Shape: {full_data.shape}")
-        print("First 5 rows of full data:")
-        print(full_data.head().to_string(index=False))
+    #     # Full data summary
+    #     full_data = self.get_full_data()
+    #     print(f"\nFull Data Shape: {full_data.shape}")
+    #     print("First 5 rows of full data:")
+    #     print(full_data.head().to_string(index=False))
 
-    def get_full_data(self) -> pd.DataFrame:
-        """
-        Returns the full DataFrame.
+    # def get_full_data(self) -> pd.DataFrame:
+    #     """
+    #     Returns the full DataFrame.
 
-        Returns:
-        pd.DataFrame: The full data from the Excel file.
-        """
-        return self.df
+    #     Returns:
+    #     pd.DataFrame: The full data from the Excel file.
+    #     """
+    #     return self.df
 
     
