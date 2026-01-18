@@ -62,8 +62,8 @@ class RecordParser:
                     if record['name'] and not record['scores']:
                         if pending:
                             # the pending is subsection header only
-                            if record.get('name') != section_name:
-                                subsections = record['name']
+                            if pending.get('name') != section_name:
+                                subsections = pending['name']
                         pending = record
                     elif record['scores'] and pending:
                         # merge pending with record
@@ -115,7 +115,7 @@ class RecordParser:
         pattern = r'''(?x)
             ^
             (?P<name>.*?)
-            \s*
+            [ \s:]*
             (?P<items>
                 (
                     (?P<num>\d+)    # Match item number
