@@ -4,34 +4,34 @@ import pandas as pd
 import re
 import json
 from typing import List, Dict, Tuple, Optional, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, Field
 
 
 class SectionDetails(BaseModel):
-    selection_df: Any  # pd.DataFrame
-    start_row: int
-    end_row: int
+    selection_df: Any = Field(description="The DataFrame containing the selected section data")
+    start_row: int = Field(description="The starting row index of the section")
+    end_row: int = Field(description="The ending row index of the section")
 
 
 class Record(BaseModel):
-    label: str
-    name: str
-    items: List[int]
-    modifiers: List[str]
-    scores: List[Any]
-    subsection: Optional[str] = None
+    label: str = Field(description="The original label string from the Excel row")
+    name: str = Field(description="The parsed name of the record")
+    items: List[int] = Field(description="List of item numbers associated with the record")
+    modifiers: List[str] = Field(description="List of modifiers for each item")
+    scores: List[Any] = Field(description="List of score values for the record")
+    subsection: Optional[str] = Field(default=None, description="Optional subsection name if the record belongs to a subsection")
 
 
 class SectionConfig(BaseModel):
-    approx_start: int
-    multi_row: bool
-    expected_records: Optional[int] = None
-    expected_questions: Optional[List[int]] = None
+    approx_start: int = Field(description="Approximate starting row for searching the section")
+    multi_row: bool = Field(description="Whether records in this section span multiple rows")
+    expected_records: Optional[int] = Field(default=None, description="Expected number of records in the section")
+    expected_questions: Optional[List[int]] = Field(default=None, description="Expected number of questions per record")
 
 
 class SectionResult(BaseModel):
-    details: SectionDetails
-    records: List[Record]
+    details: SectionDetails = Field(description="Details about the section extraction")
+    records: List[Record] = Field(description="List of parsed records from the section")
 
 
 class RecordParser:
