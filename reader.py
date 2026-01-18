@@ -154,6 +154,27 @@ class SectionParser:
     def __init__(self) -> None:
         self.record_parser = RecordParser()
 
+    def _validate_section_records(self, section_name: str, records: List[Record], config: SectionConfig) -> None:
+        """
+        Validates the parsed records against the expected configuration.
+
+        Parameters:
+        section_name (str): The name of the section.
+        records (List[Record]): The parsed records.
+        config (SectionConfig): The configuration for validation.
+
+        Raises:
+        ValueError: If validation fails.
+        """
+        if config.expected_records is not None and len(records) != config.expected_records:
+            raise ValueError(f"Section {section_name}: expected {config.expected_records} records, got {len(records)}")
+        if config.expected_questions is not None:
+            if len(config.expected_questions) != len(records):
+                raise ValueError(f"Section {section_name}: expected_questions length {len(config.expected_questions)} != records {len(records)}")
+            for i, (record, exp) in enumerate(zip(records, config.expected_questions)):
+                if len(record.scores) != exp:
+                    raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record.scores)}")
+
     def parse_section(
             self, 
             df: pd.DataFrame, 
@@ -200,14 +221,7 @@ class SectionParser:
 
         mode = 'multi' if config.multi_row else 'single'
         records = self.record_parser.parse_records(section_df, section_name, mode)
-        if config.expected_records is not None and len(records) != config.expected_records:
-            raise ValueError(f"Section {section_name}: expected {config.expected_records} records, got {len(records)}")
-        if config.expected_questions is not None:
-            if len(config.expected_questions) != len(records):
-                raise ValueError(f"Section {section_name}: expected_questions length {len(config.expected_questions)} != records {len(records)}")
-            for i, (record, exp) in enumerate(zip(records, config.expected_questions)):
-                if len(record.scores) != exp:
-                    raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record.scores)}")
+        self._validate_section_records(section_name, records, config)
         return SectionResult(
             details=SectionDetails(selection_df=section_df, start_row=start_row, end_row=end_row),
             records=records
