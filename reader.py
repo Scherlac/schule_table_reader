@@ -32,6 +32,7 @@ class SectionConfig(BaseModel):
 class SectionResult(BaseModel):
     details: SectionDetails = Field(description="Details about the section extraction")
     records: List[Record] = Field(description="List of parsed records from the section")
+    # subsections: Optional[Dict[str, List[Record]]] = Field(default=None, description="Optional mapping of subsection names to their records")
 
 
 class RecordParser:
@@ -180,7 +181,7 @@ class SectionParser:
     def parse_section(
             self, 
             df: pd.DataFrame, 
-            section_name: str) -> SectionResult:
+            section_name: str) -> Optional[SectionResult]:
         """
         Parses the section DataFrame into a structured result with details and records.
 
@@ -189,7 +190,7 @@ class SectionParser:
         section_name (str): The name of the section to parse.
 
         Returns:
-        SectionResult: Object containing section details and list of records.
+        Optional[SectionResult]: Object containing section details and list of records, or None if section not found.
         """
         # Find the exact start and end rows
         start_row = None
@@ -210,10 +211,7 @@ class SectionParser:
                 break
 
         if start_row is None:
-            return SectionResult(
-                details=SectionDetails(selection_df=pd.DataFrame(), start_row=-1, end_row=-1),
-                records=[]
-            )
+            return None
 
         section_df = df.iloc[start_row:end_row]
 
@@ -270,10 +268,9 @@ class ExcelImporter:
         # Parse sections using configuration
         for section_name, config in sections_config.items():
             parser = SectionParser(all_sections, config)
-            self.parsed_sections[section_name] = parser.parse_section(
-                self.df,
-                section_name
-            )
+            section = parser.parse_section(self.df, section_name)
+            if section:
+                self.parsed_sections[section_name] = section
 
     def get_child_name(self) -> Optional[str]:
         """
