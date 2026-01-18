@@ -13,9 +13,18 @@ class SectionDetails(BaseModel):
     end_row: int
 
 
+class Record(BaseModel):
+    label: str
+    name: str
+    items: List[int]
+    modifiers: List[str]
+    scores: List[Any]
+    subsection: Optional[str] = None
+
+
 class SectionResult(BaseModel):
     details: SectionDetails
-    records: List[Dict[str, Any]]
+    records: List[Record]
 
 
 class RecordParser:
@@ -26,7 +35,7 @@ class RecordParser:
     def __init__(self) -> None:
         pass
 
-    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str) -> List[Dict[str, Any]]:
+    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str) -> List[Record]:
         """
         Parses the DataFrame into a list of structured records, handling single or multi-row records.
 
@@ -36,7 +45,7 @@ class RecordParser:
         section_name (str): the name of the section
 
         Returns:
-        list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
+        list: List of Record objects, each with 'name', 'items', 'modifiers', 'scores'.
         """
         records = []
         pending = None
@@ -44,31 +53,31 @@ class RecordParser:
         for idx, row in df.iterrows():
             record = self.parse_record(row)
             if record:
-                record['subsection'] = subsections
+                record.subsection = subsections
                 if mode == 'single':
-                    if record['name'] and record['scores']:
+                    if record.name and record.scores:
                         records.append(record)
-                    elif record['name'] and not record['scores']:
+                    elif record.name and not record.scores:
                         # subsection header only
-                        if record.get('name') != section_name:
-                            subsections = record['name']
+                        if record.name != section_name:
+                            subsections = record.name
                 elif mode == 'multi':
-                    if record['name'] and not record['scores']:
+                    if record.name and not record.scores:
                         if pending:
                             # the pending is subsection header only
-                            if pending.get('name') != section_name:
-                                subsections = pending['name']
+                            if pending.name != section_name:
+                                subsections = pending.name
                         pending = record
-                    elif record['scores'] and pending:
+                    elif record.scores and pending:
                         # merge pending with record
-                        record = { **record, "name": pending["name"] }
+                        record.name = pending.name
                         records.append(record)
                         pending = None
                     else:
                         pending = None
         return records
 
-    def parse_record(self, row) -> Optional[Dict[str, Any]]:
+    def parse_record(self, row) -> Optional[Record]:
         """
         Parses a single row into a structured record.
 
@@ -76,19 +85,19 @@ class RecordParser:
         row: The DataFrame row.
 
         Returns:
-        dict: Dictionary with 'label', 'name', 'items', 'modifiers', 'scores' or None if no label.
+        Record: Record object with 'label', 'name', 'items', 'modifiers', 'scores' or None if no label.
         """
         if len(row) > 3 and pd.notna(row[3]):
             label = row[3]
             name, items, modifiers = self._parse_item_string(str(label))
             scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
-            return {
-                'label': str(label),
-                'name': name,
-                'items': items,
-                'modifiers': modifiers,
-                'scores': scores
-            }
+            return Record(
+                label=str(label),
+                name=name,
+                items=items,
+                modifiers=modifiers,
+                scores=scores
+            )
         return None
 
     def _parse_item_string(self, s: str) -> Tuple[str, List[int], List[str]]:
@@ -194,8 +203,8 @@ class SectionParser:
             if len(expected_questions) != len(records):
                 raise ValueError(f"Section {section_name}: expected_questions length {len(expected_questions)} != records {len(records)}")
             for i, (record, exp) in enumerate(zip(records, expected_questions)):
-                if len(record['scores']) != exp:
-                    raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record['scores'])}")
+                if len(record.scores) != exp:
+                    raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record.scores)}")
         return SectionResult(
             details=SectionDetails(selection_df=section_df, start_row=start_row, end_row=end_row),
             records=records
@@ -304,9 +313,9 @@ class ExcelImporter:
         for section_name, section_result in parsed_sections.items():
             print(f"\n{section_name}:")
             for i, record in enumerate(section_result.records):
-                scores = record['scores']
-                subsection = record.get('subsection')
-                name = record.get('name')
+                scores = record.scores
+                subsection = record.subsection
+                name = record.name
                 display_name = f"{subsection}/{name}" if subsection else name
                 if scores:
                     count = len(scores)
