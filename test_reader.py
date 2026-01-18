@@ -6,46 +6,6 @@ Test script for the ExcelImporter class.
 import re
 from reader import ExcelImporter, RecordParser
 
-def test_regex_findall():
-    """
-    Tests the regex findall for extracting item numbers and modifiers.
-    """
-    item_pattern = r'(?P<num>\d+)(?P<mod>[a-zA-Z]*)'
-    
-    test_cases = [
-        ("22", [("22", "")]),
-        ("27n", [("27", "n")]),
-        ("Auditív-aktív 22 27n 38 41", [("22", ""), ("27", "n"), ("38", ""), ("41", "")]),
-        ("1a 2b", [("1", "a"), ("2", "b")]),
-        ("", []),
-        ("no digits", []),
-    ]
-    
-    for s, expected in test_cases:
-        matches = re.findall(item_pattern, s)
-        assert matches == expected, f"For '{s}': expected {expected}, got {matches}"
-        print(f"✓ findall test passed for: '{s}' -> {matches}")
-
-def test_regex_sub():
-    """
-    Tests the regex sub for removing item patterns to extract name.
-    """
-    item_pattern = r'\d+[a-zA-Z]*'
-    
-    test_cases = [
-        ("Auditív-aktív 22 27n 38 41", "Auditív-aktív"),
-        ("Test 1a 2b", "Test"),
-        ("Name 10 20", "Name"),
-        ("", ""),
-        ("Just Name", "Just Name"),
-        ("1 2 3", ""),
-        ("1a,2b;3c", ",;"),
-    ]
-    
-    for s, expected in test_cases:
-        name = re.sub(item_pattern, '', s).strip()
-        assert name == expected, f"For '{s}': expected '{expected}', got '{name}'"
-        print(f"✓ sub test passed for: '{s}' -> '{name}'")
 
 def test_parse_item_string():
     """
@@ -58,10 +18,12 @@ def test_parse_item_string():
         ("Auditív-aktív 22 27n 38 41", "Auditív-aktív", [22, 27, 38, 41], ['', 'n', '', '']),
         ("Test 1a 2b", "Test", [1, 2], ['a', 'b']),
         ("Name 10 20", "Name", [10, 20], ['', '']),
+        ("– affiliáció (M3): az odatartozás szükséglete, főleg egykorúakhoz",
+         "– affiliáció (M3): az odatartozás szükséglete, főleg egykorúakhoz", [], []),
         ("", "", [], []),
         ("Just Name", "Just Name", [], []),
         ("1 2 3", "", [1, 2, 3], ['', '', '']),
-        ("1a,2b;3c", ",;", [1, 2, 3], ['a', 'b', 'c']),  # New behavior for ; case
+        ("1a,2b;3c", "", [1, 2, 3], ['a', 'b', 'c']),  # New behavior for ; case
     ]
     
     for s, exp_name, exp_items, exp_modifiers in test_cases:
@@ -88,7 +50,5 @@ def test_excel_importer():
     importer.dump_report()
 
 if __name__ == "__main__":
-    test_regex_findall()
-    test_regex_sub()
     test_parse_item_string()
     test_excel_importer()

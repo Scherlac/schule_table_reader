@@ -32,41 +32,46 @@ class RecordParser:
     def __init__(self) -> None:
         pass
 
-    def parse_records(self, df: pd.DataFrame, mode: str) -> List[Dict[str, Any]]:
+    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str) -> List[Dict[str, Any]]:
         """
         Parses the DataFrame into a list of structured records, handling single or multi-row records.
 
         Parameters:
         df (pd.DataFrame): The section DataFrame.
         mode (str): 'single' for single-row records, 'multi' for multi-row records.
+        section_name (str): the name of the section
 
         Returns:
         list: List of dicts, each with 'name', 'items', 'modifiers', 'scores'.
         """
         records = []
         pending = None
+        subsections = None
         for idx, row in df.iterrows():
             record = self.parse_record(row)
             if record:
+                record['subsection'] = subsections
                 if mode == 'single':
                     if record['name'] and record['scores']:
                         records.append(record)
+                    elif record['name'] and not record['scores']:
+                        # subsection header only
+                        if record.get('name') != section_name:
+                            subsections = record['name']
                 elif mode == 'multi':
-                    if record['name'] and not record['items'] and not record['scores']:
-                        if pending and pending.get('scores'):
-                            records.append(pending)
+                    if record['name'] and not record['scores']:
+                        if pending:
+                            # the pending is subsection header only
+                            if record.get('name') != section_name:
+                                subsections = record['name']
                         pending = record
-                    elif record['items'] and not record['name'] and not record['scores']:
-                        if pending:
-                            pending['items'] = record['items']
-                            pending['modifiers'] = record['modifiers']
-                    elif record['scores']:
-                        if pending:
-                            pending['scores'] = record['scores']
-                            records.append(pending)
-                            pending = None
-        if mode == 'multi' and pending:
-            records.append(pending)
+                    elif record['scores'] and pending:
+                        # merge pending with record
+                        record = { **record, "name": pending["name"] }
+                        records.append(record)
+                        pending = None
+                    else:
+                        pending = None
         return records
 
     def parse_record(self, row) -> Optional[Dict[str, Any]]:
@@ -79,8 +84,8 @@ class RecordParser:
         Returns:
         dict: Dictionary with 'label', 'name', 'items', 'modifiers', 'scores' or None if no label.
         """
-        label = row[3] if len(row) > 3 and pd.notna(row[3]) else None
-        if label:
+        if len(row) > 3 and pd.notna(row[3]):
+            label = row[3]
             name, items, modifiers = self._parse_item_string(str(label))
             scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
             return {
@@ -94,9 +99,7 @@ class RecordParser:
 
     def _parse_item_string(self, s: str) -> Tuple[str, List[int], List[str]]:
         """
-        Parses a string to extract name, item numbers, and their modifiers.
-
-        Handles different formats: space-separated, comma-separated, semicolon-separated.
+        Parses a string to extract name, item numbers, and their modifiers using a single regex pattern.
 
         Parameters:
         s (str): The string containing the name and item numbers.
@@ -104,42 +107,33 @@ class RecordParser:
         Returns:
         tuple: (name str, list of ints for items, list of strs for modifiers)
         """
-        if ';' in s:
-            name = re.sub(r'\d+[a-zA-Z]*', '', s).strip()
-            parts = []
-            for x in s.split(';'):
-                x = x.strip()
-                if x:
-                    if ',' in x:
-                        parts.extend([p.strip() for p in x.split(',') if p.strip()])
-                    else:
-                        parts.append(x)
-            items = []
-            modifiers = []
-            for p in parts:
-                match = re.match(r'(\d+)([a-zA-Z]*)', p)
-                if match:
-                    items.append(int(match.group(1)))
-                    modifiers.append(match.group(2))
-            return name, items, modifiers
-        else:
-            parts = s.split()
-            item_parts = []
-            name_parts = []
-            for p in parts:
-                if re.match(r'\d+[a-zA-Z]*', p):
-                    item_parts.append(p)
-                else:
-                    name_parts.append(p)
-            name = ' '.join(name_parts)
-            items = []
-            modifiers = []
-            for p in item_parts:
-                match = re.match(r'(\d+)([a-zA-Z]*)', p)
-                if match:
-                    items.append(int(match.group(1)))
-                    modifiers.append(match.group(2))
-            return name, items, modifiers
+        items_pattern = r'''(?x)
+            (?P<num>\d+)    # Match item number
+            (?P<mod>[a-zA-Z]*) # Match optional modifier
+            [ ,;]?          # Optional separator (space, comma, or semicolon)
+        '''
+        pattern = r'''(?x)
+            ^
+            (?P<name>.*?)
+            \s*
+            (?P<items>
+                (
+                    (?P<num>\d+)    # Match item number
+                    (?P<mod>[a-zA-Z]*) # Match optional modifier
+                    [ ,;]*          # Optional separator (space, comma, or semicolon)
+                )*
+            )
+            $
+        '''
+        matches = re.match(pattern, s)
+        if matches:
+            name_part = matches.group('name').strip()
+            items_part = matches.group('items')
+            matches = re.findall(items_pattern, items_part)
+            items = [int(match[0]) for match in matches]
+            modifiers = [match[1] for match in matches]
+            return name_part, items, modifiers
+        return s.strip(), [], []
 
 
 class SectionParser:
@@ -187,7 +181,7 @@ class SectionParser:
         section_df = df.iloc[start_row:end_row]
 
         mode = 'multi' if multi_row else 'single'
-        records = self.record_parser.parse_records(section_df, mode)
+        records = self.record_parser.parse_records(section_df, section_name, mode)
         if expected_records is not None and len(records) != expected_records:
             raise ValueError(f"Section {section_name}: expected {expected_records} records, got {len(records)}")
         if expected_questions is not None:
@@ -211,16 +205,17 @@ class ExcelImporter:
         Parameters:
         file_path (str): The path to the Excel file.
         """
-        try:
+        # try:
+        if True:
             self.df = pd.read_excel(file_path, header=None)
             self.sections = {}
             self.parsed_sections = {}
             self.child_name = None
             self.parser = SectionParser()
             self._extract_data()
-        except Exception as e:
-            print(f"An error occurred while importing the Excel file: {e}")
-            self.df = None
+        # except Exception as e:
+        #     print(f"An error occurred while importing the Excel file: {e}")
+        #     self.df = None
 
     def _extract_data(self) -> None:
         """
@@ -301,13 +296,16 @@ class ExcelImporter:
             print(f"\n{section_name}:")
             for i, record in enumerate(records):
                 scores = record['scores']
+                subsection = record.get('subsection')
+                name = record.get('name')
+                display_name = f"{subsection}/{name}" if subsection else name
                 if scores:
                     count = len(scores)
                     total = sum(scores)
                     mean = total / count if count > 0 else 0
-                    print(f"  Record {i+1} ({record['name']}): Count={count}, Sum={total}, Mean={mean:.2f}")
+                    print(f"  Record {i+1} ({display_name}): Count={count}, Sum={total}, Mean={mean:.2f}")
                 else:
-                    print(f"  Record {i+1} ({record['name']}): No scores")
+                    print(f"  Record {i+1} ({display_name}): No scores")
 
         # Full data summary
         full_data = self.get_full_data()
