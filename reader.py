@@ -106,7 +106,7 @@ class RecordParser:
     def __init__(self) -> None:
         pass
 
-    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str) -> List[Record]:
+    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str, start_row_offset: int = 0, full_df: Optional[pd.DataFrame] = None) -> List[Record]:
         """
         Parses the DataFrame into a list of structured records, handling single or multi-row records.
 
@@ -114,6 +114,8 @@ class RecordParser:
         df (pd.DataFrame): The section DataFrame.
         mode (str): 'single' for single-row records, 'multi' for multi-row records.
         section_name (str): the name of the section
+        start_row_offset (int): The offset to add to row indices to get absolute positions
+        full_df (pd.DataFrame): The full DataFrame for RecordDetails
 
         Returns:
         list: List of Record objects, each with 'name', 'items', 'modifiers', 'scores'.
@@ -122,7 +124,8 @@ class RecordParser:
         pending = None
         subsections = None
         for idx, row in df.iterrows():
-            record = self.parse_record(row)
+            absolute_idx = idx + start_row_offset
+            record = self.parse_record(row, absolute_idx, full_df)
             if record:
                 record.subsection = subsections
                 if mode == 'single':
@@ -148,12 +151,14 @@ class RecordParser:
                         pending = None
         return records
 
-    def parse_record(self, row) -> Optional[Record]:
+    def parse_record(self, row, row_idx: int, full_df: Optional[pd.DataFrame] = None) -> Optional[Record]:
         """
         Parses a single row into a structured record.
 
         Parameters:
         row: The DataFrame row.
+        row_idx: The absolute row index in the full DataFrame
+        full_df: The full DataFrame for RecordDetails
 
         Returns:
         Record: Record object with 'label', 'name', 'items', 'modifiers', 'scores' or None if no label.
@@ -162,12 +167,16 @@ class RecordParser:
             label = row[3]
             name, items, modifiers = self._parse_item_string(str(label))
             scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
+            details = None
+            if full_df is not None:
+                details = RecordDetails(source=full_df, location=(row_idx, 3))
             return Record(
                 label=str(label),
                 name=name,
                 items=items,
                 modifiers=modifiers,
-                scores=scores
+                scores=scores,
+                details=details
             )
         return None
 
@@ -279,7 +288,7 @@ class SectionParser:
         section_df = df.iloc[start_row:end_row]
 
         mode = 'multi' if self.config.multi_row else 'single'
-        records = self.record_parser.parse_records(section_df, section_name, mode)
+        records = self.record_parser.parse_records(section_df, section_name, mode, start_row, df)
         self._validate_section_records(section_name, records, self.config)
         return SectionResult(
             details=SectionDetails(selection_df=section_df, start_row=start_row, end_row=end_row),
@@ -396,19 +405,48 @@ class ExcelImporter:
                 else:
                     print(f"  Record {i+1} ({display_name}): No scores")
 
-    #     # Full data summary
-    #     full_data = self.get_full_data()
-    #     print(f"\nFull Data Shape: {full_data.shape}")
-    #     print("First 5 rows of full data:")
-    #     print(full_data.head().to_string(index=False))
+    def update_excel_with_statistics(self, output_file: str) -> None:
+        """
+        Calculates sum and mean for all records and updates the Excel file with results in column S.
+        
+        Parameters:
+        output_file (str): The path to save the updated Excel file.
+        """
+        if self.df is None:
+            print("No data loaded.")
+            return
 
-    # def get_full_data(self) -> pd.DataFrame:
-    #     """
-    #     Returns the full DataFrame.
+        # Ensure the DataFrame has at least 19 columns (0-18, where 18 is column S)
+        while len(self.df.columns) <= 18:
+            self.df[len(self.df.columns)] = None
 
-    #     Returns:
-    #     pd.DataFrame: The full data from the Excel file.
-    #     """
-    #     return self.df
+        # Get all parsed sections
+        parsed_sections = self.get_parsed_sections()
+        
+        # Process each record and update the DataFrame
+        for section_name, section_result in parsed_sections.items():
+            for record in section_result.records:
+                if record.scores and record.details:
+                    scores = record.scores
+                    total = sum(scores)
+                    mean = total / len(scores) if scores else 0
+                    
+                    # Get the row and column from details
+                    row_idx, col_idx = record.details.location
+                    
+                    # Column S is index 18 (A=0, B=1, ..., S=18)
+                    # Format as "Sum: X, Mean: Y"
+                    result_text = f"Sum: {total}, Mean: {mean:.2f}"
+                    
+                    # Ensure we have enough rows
+                    if row_idx >= len(self.df):
+                        continue
+                    
+                    # Update the DataFrame at column S (index 18)
+                    self.df.iloc[row_idx, 18] = result_text
+        
+        # Save the updated DataFrame to Excel
+        self.df.to_excel(output_file, index=False, header=False)
+        print(f"Updated Excel saved to: {output_file}")
 
     

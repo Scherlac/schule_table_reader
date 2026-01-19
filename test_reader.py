@@ -48,6 +48,10 @@ def test_excel_importer():
 
     # Dump the report
     importer.dump_report()
+    
+    # Update Excel with statistics
+    output_file = 'példatáblázat_updated.xlsx'
+    importer.update_excel_with_statistics(output_file)
 
 if __name__ == "__main__":
     test_parse_item_string()
