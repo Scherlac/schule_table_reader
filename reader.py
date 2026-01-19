@@ -4,8 +4,28 @@ import pandas as pd
 import re
 import json
 import enum
-from typing import List, Dict, Tuple, Optional, Any
-from pydantic import BaseModel, Field, ConfigDict
+import numpy as np
+import math
+from typing import List, Dict, Tuple, Optional, Any, Annotated
+from pydantic import BaseModel, Field
+
+
+class REPORT_EVAL_ENUM(enum.Flag):
+    HIGH_GRADES = enum.auto()
+    HIGH_GRADES_TOTAL = enum.auto()
+    MEAN = enum.auto()
+    SUM = enum.auto()
+    NORMED_SUM = enum.auto()
+    COPY = enum.auto()
+
+report_eval_dict = {
+    "> max - dev": REPORT_EVAL_ENUM.HIGH_GRADES,
+    "> max - dev (total)": REPORT_EVAL_ENUM.HIGH_GRADES_TOTAL,
+    "mean": REPORT_EVAL_ENUM.MEAN,
+    "sum": REPORT_EVAL_ENUM.SUM,
+    "normed sum": REPORT_EVAL_ENUM.NORMED_SUM,
+    "copy": REPORT_EVAL_ENUM.COPY
+}
 
 
 class SectionDetails(BaseModel):
@@ -15,9 +35,7 @@ class SectionDetails(BaseModel):
 
 
 class RecordDetails(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    
-    source: pd.DataFrame = Field(description="The DataFrame containing the source data")
+    source: Any = Field(description="The DataFrame containing the source data")
     location: Tuple[int, int] = Field(description="The (section-relative row, column) coordinates")
 
 
@@ -27,37 +45,25 @@ class Record(BaseModel):
     items: List[int] = Field(description="List of item numbers associated with the record")
     modifiers: List[str] = Field(description="List of modifiers for each item")
     scores: List[Any] = Field(description="List of score values for the record")
-    subsection: Optional[str] = Field(default=None, description="Optional subsection name if the record belongs to a subsection")
-    details: Optional[RecordDetails] = Field(default=None, description="Details about the source and location of the data")
+    subsection: Optional[str] = Field(None, description="Optional subsection name if the record belongs to a subsection")
+    details: Optional[RecordDetails] = Field(None, description="Details about the source and location of the data")
+    eval_results: Optional[Dict[str, Any]] = Field(None, description="Evaluation results for the record")
 
-
-class REPORT_EVAL_ENUM(enum.Flag):
-    HIGH_GRADES = enum.auto()
-    NORMED_SUM = enum.auto()
-    MEAN = enum.auto()
-    COPY = enum.auto()
-
-report_evlal_dict = {
-    "> max - dev": REPORT_EVAL_ENUM.HIGH_GRADES,
-    "normed sum": REPORT_EVAL_ENUM.NORMED_SUM,
-    "mean": REPORT_EVAL_ENUM.MEAN,
-    "copy": REPORT_EVAL_ENUM.COPY
-}
 
 
 class SectionConfig(BaseModel):
     approx_start: int = Field(description="Approximate starting row for searching the section")
     multi_row: bool = Field(description="Whether records in this section span multiple rows")
-    expected_records: Optional[int] = Field(default=None, description="Expected number of records in the section")
-    expected_questions: Optional[List[int]] = Field(default=None, description="Expected number of questions per record")
+    expected_records: Optional[int] = Field(None, description="Expected number of records in the section")
+    expected_questions: Optional[List[int]] = Field(None, description="Expected number of questions per record")
     # "classification": [1, 1, 1, 1, 1, 2, 2, 3, 3],
-    classification: Optional[List[int]] = Field(default=None, description="Class identifiers for each record"),
+    classification: Optional[List[int]] = Field(None, description="Class identifiers for each record")
     # "class_marker": ["cognitive", "social", "logic"],
-    class_marker: Optional[List[str]] = Field(default=None, description="Class markers for grouping records"),
+    class_marker: Optional[List[str]] = Field(None, description="Class markers for grouping records")
     # "question_id": [11, 12, 21, 22, 31, 41, 42, 51, 52],
-    question_id: Optional[List[int]] = Field(default=None, description="Question IDs for each record"),
+    question_id: Optional[List[int]] = Field(None, description="Question IDs for each record")
     # "report_eval": "> max - dev"
-    report_eval: Optional[str] = Field(default=None, description="Evaluation criteria for reporting scores")
+    report_eval: Optional[str] = Field(None, description="Evaluation criteria for reporting scores")
 
     @property
     def report_eval_flags(self) -> REPORT_EVAL_ENUM:
@@ -72,8 +78,8 @@ class SectionConfig(BaseModel):
         flags = REPORT_EVAL_ENUM(0)
         parts = [part.strip() for part in self.report_eval.split(',')]
         for part in parts:
-            if part in report_evlal_dict:
-                flags |= report_evlal_dict[part]
+            if part in report_eval_dict:
+                flags |= report_eval_dict[part]
         return flags
     
     @report_eval_flags.setter
@@ -85,7 +91,7 @@ class SectionConfig(BaseModel):
         flags (REPORT_EVAL_ENUM): Combined flags to set the report_eval configuration.
         """
         parts = []
-        for key, value in report_evlal_dict.items():
+        for key, value in report_eval_dict.items():
             if flags & value:
                 parts.append(key)
         self.report_eval = ', '.join(parts)
@@ -315,13 +321,30 @@ class ExcelImporter:
         # try:
         if True:
             self.df = pd.read_excel(file_path, header=None)
-            self.sections = {}
-            self.parsed_sections = {}
-            self.child_name = None
+            self.sections : Dict[str, pd.DataFrame] = {}
+            self.parsed_sections : Dict[str, SectionResult] = {}
+            self.child_name : Optional[str] = None
+
+            self.sections_config : Dict[str, SectionConfig] = {}
+
+            # Load section configuration from JSON
+            self._load_config('sections_config.json')
+
             self._extract_data()
         # except Exception as e:
         #     print(f"An error occurred while importing the Excel file: {e}")
         #     self.df = None
+
+    def _load_config(self, config_path: str) -> None:
+        """
+        Loads the section configuration from a JSON file.
+
+        Parameters:
+        config_path (str): The path to the JSON configuration file.
+        """
+        with open(config_path, 'r', encoding='utf-8') as f:
+            raw_config = json.load(f)
+            self.sections_config = {k: SectionConfig.model_validate(v) for k, v in raw_config.items()}
 
     def _extract_data(self) -> None:
         """
@@ -334,15 +357,10 @@ class ExcelImporter:
         if len(self.df) > 1 and len(self.df.columns) > 3:
             self.child_name = self.df.iloc[1, 3] if pd.notna(self.df.iloc[1, 3]) else None
 
-        # Load section configuration from JSON
-        with open('sections_config.json', 'r', encoding='utf-8') as f:
-            raw_config = json.load(f)
-            sections_config = {k: SectionConfig.model_validate(v) for k, v in raw_config.items()}
-
-        all_sections = list(sections_config.keys())
+        all_sections = list(self.sections_config.keys())
 
         # Parse sections using configuration
-        for section_name, config in sections_config.items():
+        for section_name, config in self.sections_config.items():
             parser = SectionParser(all_sections, config)
             section = parser.parse_section(self.df, section_name)
             if section:
@@ -403,11 +421,118 @@ class ExcelImporter:
                 display_name = f"{subsection}/{name}" if subsection else name
                 if scores:
                     count = len(scores)
-                    total = sum(scores)
+                    total = np.sum(scores)
                     mean = total / count if count > 0 else 0
                     print(f"  Record {i+1} ({display_name}): Count={count}, Sum={total}, Mean={mean:.2f}")
                 else:
                     print(f"  Record {i+1} ({display_name}): No scores")
+
+    def update_excel_with_record_statistics(self, section_name : str, section_result: SectionResult) -> None:
+            
+            section_start_row = section_result.details.start_row
+            selection_config : SectionConfig  = self.sections_config[section_name]
+            report_eval_flags = selection_config.report_eval_flags
+            expected_questions = self.sections_config[section_name].expected_questions
+
+
+            # Add column headers at section start row
+            self.df.iloc[section_start_row, 18] = "Sum"
+            self.df.iloc[section_start_row, 19] = "Mean"
+            self.df.iloc[section_start_row, 20] = "Normed Sum"
+            
+            # Process each record in the section
+            for i, record in enumerate(section_result.records):
+                if record.scores and record.details:
+                    scores = np.array(record.scores).astype(float)
+                    entered_questions = len(scores)
+                    expected_question = expected_questions[i] 
+                    print(f"Processing record '{record.name}' with scores: {scores}, expected questions: {expected_question}, entered questions: {entered_questions}")
+                    total = scores.sum()
+                    mean = scores.mean() 
+
+                    normed_sum = max(expected_question, entered_questions) * mean
+
+                    record.eval_results = {
+                        "sum": total,
+                        "mean": mean,
+                        "normed_sum": normed_sum
+                    }
+                    
+                    # Get the section-relative row and add section_start_row for absolute position
+                    section_relative_row, col_idx = record.details.location
+                    row_idx = section_relative_row + section_result.details.start_row
+                    
+                    # Column S (18) for Sum, Column T (19) for Mean
+                    self.df.iloc[row_idx, 18] = total
+
+                    mean = round(mean, 2)
+                    self.df.iloc[row_idx, 19] = mean
+
+
+                    self.df.iloc[row_idx, 20] = normed_sum
+
+    def update_excel_with_subsection_statistics(self, section_name : str, section_result: SectionResult) -> None:
+        section_start_row = section_result.details.start_row
+
+        # Add column headers at section start row
+        self.df.iloc[section_start_row, 21] = "Grade limit"
+        self.df.iloc[section_start_row, 22] = "Class evaluation"
+        self.df.iloc[section_start_row, 23] = "Record evaluation"
+
+        classification = self.sections_config[section_name].classification
+        question_id = self.sections_config[section_name].question_id
+        class_marker = self.sections_config[section_name].class_marker
+        if not classification or not class_marker:
+            return
+        
+        # Process each class
+        selection_classification : Dict[str, dict[str, Any]] = {}
+        for class_id in set(classification):
+            marker = class_marker[class_id - 1]  # assuming class_id starts from 1
+            record_mask = ((i, idx) for i, (c, idx) in enumerate(zip(classification, question_id)) if c == class_id)
+            records_in_class = [section_result.records[i] for i, _ in record_mask]
+            
+
+            means = [r.eval_results['mean'] for r in records_in_class if r.eval_results and 'mean' in r.eval_results]
+            std_of_means = np.std(means) if means else 0
+            max_of_means = np.max(means) if means else 0
+
+            high_grade_limit = (1.0 - 0.001) * (max_of_means - std_of_means) # 0.001 error margin
+
+            selected_records = []
+
+            for record, (i, idx) in zip(records_in_class, record_mask):
+
+                section_relative_row, col_idx = record.details.location
+                row_idx = section_relative_row + section_result.details.start_row
+
+                if record.eval_results and 'mean' in record.eval_results:
+                    is_high = record.eval_results['mean'] >= high_grade_limit
+                    selected_records.append(idx)
+
+                    # add to excel
+                    self.df.iloc[row_idx, 23] = "High" if is_high else "Other"
+
+            class_evaluation = f"{marker}: { ', '.join(map(str, selected_records)) }"
+
+            first_record = records_in_class[0]
+            section_relative_row, col_idx = first_record.details.location
+            row_idx = section_relative_row + section_result.details.start_row
+
+            self.df.iloc[row_idx, 21] = round(high_grade_limit, 2)
+            self.df.iloc[row_idx, 22] = class_evaluation
+
+            selection_classification[marker] = {
+                "records": records_in_class,
+                "record_mask": record_mask,
+                "means": means,
+                "std_of_means": std_of_means,
+                "max_of_means": max_of_means,
+                "high_grade_limit": high_grade_limit,
+                "class_evaluation": class_evaluation
+            }
+
+
 
     def update_excel_with_statistics(self, output_file: str) -> None:
         """
@@ -422,7 +547,7 @@ class ExcelImporter:
             return
 
         # Ensure the DataFrame has at least 20 columns (0-19, where 18 is column S, 19 is column T)
-        while len(self.df.columns) <= 19:
+        while len(self.df.columns) <= 26:
             self.df[len(self.df.columns)] = None
 
         # Get all parsed sections
@@ -430,27 +555,14 @@ class ExcelImporter:
         
         # Process each section
         for section_name, section_result in parsed_sections.items():
-            section_start_row = section_result.details.start_row
+
+            print(f"Updating statistics for section: {section_name}")
+
+            self.update_excel_with_record_statistics(section_name, section_result)
+
+            self.update_excel_with_subsection_statistics(section_name, section_result)
             
-            # Add column headers at section start row
-            self.df.iloc[section_start_row, 18] = "Sum"
-            self.df.iloc[section_start_row, 19] = "Mean"
-            
-            # Process each record in the section
-            for record in section_result.records:
-                if record.scores and record.details:
-                    scores = record.scores
-                    total = sum(scores)
-                    mean = total / len(scores) if scores else 0
-                    
-                    # Get the section-relative row and add section_start_row for absolute position
-                    section_relative_row, col_idx = record.details.location
-                    row_idx = section_relative_row + section_result.details.start_row
-                    
-                    # Column S (18) for Sum, Column T (19) for Mean
-                    self.df.iloc[row_idx, 18] = total
-                    self.df.iloc[row_idx, 19] = round(mean, 2)
-        
+
         # Save the updated DataFrame to Excel
         self.df.to_excel(output_file, index=False, header=False)
         print(f"Updated Excel saved to: {output_file}")
