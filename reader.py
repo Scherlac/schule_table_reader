@@ -19,7 +19,6 @@ class RecordDetails(BaseModel):
     
     source: pd.DataFrame = Field(description="The DataFrame containing the source data")
     location: Tuple[int, int] = Field(description="The (section-relative row, column) coordinates")
-    section_start_row: int = Field(description="The starting row of the section in the full DataFrame")
 
 
 class Record(BaseModel):
@@ -173,8 +172,7 @@ class RecordParser:
             if full_df is not None:
                 details = RecordDetails(
                     source=full_df, 
-                    location=(section_relative_idx, 3),
-                    section_start_row=section_start_row
+                    location=(section_relative_idx, 3)
                 )
             return Record(
                 label=str(label),
@@ -439,7 +437,7 @@ class ExcelImporter:
                     
                     # Get the section-relative row and add section_start_row for absolute position
                     section_relative_row, col_idx = record.details.location
-                    row_idx = section_relative_row + record.details.section_start_row
+                    row_idx = section_relative_row + section_result.details.start_row
                     
                     # Column S is index 18 (A=0, B=1, ..., S=18)
                     # Format as "Sum: X, Mean: Y"
