@@ -4,6 +4,10 @@ Test script for the ExcelImporter class.
 """
 
 import re
+import glob
+import os
+import pathlib
+import pandas as pd
 from reader import ExcelImporter, RecordParser
 
 
@@ -35,27 +39,79 @@ def test_parse_item_string():
 
 def test_excel_importer():
     """
-    Tests the ExcelImporter class with the sample Excel file.
+    Tests the ExcelImporter class with all Excel files in the current directory.
+    Processes each file, places outputs in 'result' subfolder, and creates a summary.xlsx
+    with concatenated evaluation data.
     """
-    file_path = 'példatáblázat.xlsx'
-
-    # Create importer instance
-    importer = ExcelImporter(file_path)
-
-    if importer.df is None:
-        print("Failed to load the Excel file.")
-        return
-
-    # Dump the report
-    importer.dump_report()
+    # Find all Excel files in current directory
+    excel_files = glob.glob('*.xlsx')
+    excel_files = [f for f in excel_files if not f.startswith('~$')]  # Exclude temp files
     
-    # Update Excel with statistics
-    output_file = 'példatáblázat_final.xlsx'
-    importer.update_excel_with_statistics(output_file)
-
-    df_data = importer.evaluate()
-    print("Evaluation DataFrame:")
-    print(df_data.head())
+    if not excel_files:
+        print("No Excel files found in current directory.")
+        return
+    
+    print(f"Found {len(excel_files)} Excel files: {excel_files}")
+    
+    # Create result directory if it doesn't exist
+    result_dir = 'result'
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
+        print(f"Created result directory: {result_dir}")
+    
+    # List to collect evaluation DataFrames
+    evaluation_dfs = []
+    
+    # Process each Excel file
+    for file_path in excel_files:
+        print(f"\nProcessing: {file_path}")
+        
+        try:
+            # Create importer instance
+            importer = ExcelImporter(file_path)
+            
+            if importer.df is None:
+                print(f"Failed to load the Excel file: {file_path}")
+                continue
+            
+            # Dump the report
+            importer.dump_report()
+            
+            # Update Excel with statistics (output to result folder)
+            base_name = os.path.splitext(file_path)[0]
+            output_file = os.path.join(result_dir, f'{base_name}_processed.xlsx')
+            importer.update_excel_with_statistics(output_file)
+            
+            # Get evaluation data
+            df_eval = importer.evaluate()
+            if df_eval is not None and not df_eval.empty:
+                # Add source file column
+                df_eval['source_file'] = file_path
+                evaluation_dfs.append(df_eval)
+                print(f"Collected evaluation data with {len(df_eval.columns)} columns")
+            else:
+                print("No evaluation data collected")
+                
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+            continue
+    
+    # Concatenate all evaluation DataFrames
+    if evaluation_dfs:
+        print(f"\nConcatenating {len(evaluation_dfs)} evaluation DataFrames...")
+        summary_df = pd.concat(evaluation_dfs, ignore_index=False)
+        
+        # Save summary to Excel
+        summary_path = os.path.join(result_dir, 'summary.xlsx')
+        summary_df.to_excel(summary_path)
+        
+        print(f"Summary saved to: {summary_path}")
+        print(f"Summary shape: {summary_df.shape}")
+        print("Summary columns:", list(summary_df.columns))
+        print("\nFirst few rows of summary:")
+        print(summary_df.head())
+    else:
+        print("No evaluation data collected from any files.")
 
 if __name__ == "__main__":
     test_parse_item_string()
