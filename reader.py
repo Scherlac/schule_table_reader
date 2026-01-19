@@ -65,38 +65,70 @@ class SectionConfig(BaseModel):
     # "question_id": [11, 12, 21, 22, 31, 41, 42, 51, 52],
     question_id: Optional[List[int]] = Field(None, description="Question IDs for each record")
     # "report_eval": "> max - dev"
-    report_eval: Optional[str] = Field(None, description="Evaluation criteria for reporting scores")
+    class_eval: Optional[str] = Field(None, description="Evaluation criteria for reporting scores on class level")
+    record_eval: Optional[str] = Field(None, description="Evaluation criteria for reporting scores on record level")
 
     @property
-    def report_eval_flags(self) -> REPORT_EVAL_ENUM:
+    def class_eval_flags(self) -> REPORT_EVAL_ENUM:
         """
-        Parses the report_eval string into a combined REPORT_EVAL_ENUM flag.
+        Parses the class_eval string into a combined REPORT_EVAL_ENUM flag.
 
         Returns:
-        REPORT_EVAL_ENUM: Combined flags based on the report_eval configuration.
+        REPORT_EVAL_ENUM: Combined flags based on the class_eval configuration.
         """
-        if not self.report_eval:
+        if not self.class_eval:
             return REPORT_EVAL_ENUM(0)
         flags = REPORT_EVAL_ENUM(0)
-        parts = [part.strip() for part in self.report_eval.split(',')]
+        parts = [part.strip() for part in self.class_eval.split(',')]
         for part in parts:
             if part in report_eval_dict:
                 flags |= report_eval_dict[part]
         return flags
     
-    @report_eval_flags.setter
-    def report_eval_flags(self, flags: REPORT_EVAL_ENUM) -> None:
+    @class_eval_flags.setter
+    def class_eval_flags(self, flags: REPORT_EVAL_ENUM) -> None:
         """
-        Sets the report_eval string based on the provided REPORT_EVAL_ENUM flags.
+        Sets the class_eval string based on the provided REPORT_EVAL_ENUM flags.
 
         Parameters:
-        flags (REPORT_EVAL_ENUM): Combined flags to set the report_eval configuration.
+        flags (REPORT_EVAL_ENUM): Combined flags to set the class_eval configuration.
         """
         parts = []
         for key, value in report_eval_dict.items():
             if flags & value:
                 parts.append(key)
-        self.report_eval = ', '.join(parts)
+        self.class_eval = ', '.join(parts)
+
+    @property
+    def record_eval_flags(self) -> REPORT_EVAL_ENUM:
+        """
+        Parses the record_eval string into a combined REPORT_EVAL_ENUM flag.
+
+        Returns:
+        REPORT_EVAL_ENUM: Combined flags based on the record_eval configuration.
+        """
+        if not self.record_eval:
+            return REPORT_EVAL_ENUM(0)
+        flags = REPORT_EVAL_ENUM(0)
+        parts = [part.strip() for part in self.record_eval.split(',')]
+        for part in parts:
+            if part in report_eval_dict:
+                flags |= report_eval_dict[part]
+        return flags
+    
+    @record_eval_flags.setter
+    def record_eval_flags(self, flags: REPORT_EVAL_ENUM) -> None:
+        """
+        Sets the record_eval string based on the provided REPORT_EVAL_ENUM flags.
+
+        Parameters:
+        flags (REPORT_EVAL_ENUM): Combined flags to set the record_eval configuration.
+        """
+        parts = []
+        for key, value in report_eval_dict.items():
+            if flags & value:
+                parts.append(key)
+        self.record_eval = ', '.join(parts)
 
 
 
@@ -448,7 +480,8 @@ class ExcelImporter:
             
             section_start_row = section_result.details.start_row
             selection_config : SectionConfig  = self.sections_config[section_name]
-            report_eval_flags = selection_config.report_eval_flags
+            class_eval_flags = selection_config.class_eval_flags
+            record_eval_flags = selection_config.record_eval_flags
             expected_questions = self.sections_config[section_name].expected_questions
 
 
