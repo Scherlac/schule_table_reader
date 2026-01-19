@@ -18,7 +18,8 @@ class RecordDetails(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     source: pd.DataFrame = Field(description="The DataFrame containing the source data")
-    location: Tuple[int, int] = Field(description="The (row, column) coordinates in the table")
+    location: Tuple[int, int] = Field(description="The (section-relative row, column) coordinates")
+    section_start_row: int = Field(description="The starting row of the section in the full DataFrame")
 
 
 class Record(BaseModel):
@@ -106,7 +107,7 @@ class RecordParser:
     def __init__(self) -> None:
         pass
 
-    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str, start_row_offset: int = 0, full_df: Optional[pd.DataFrame] = None) -> List[Record]:
+    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str, start_row_offset: int, full_df: Optional[pd.DataFrame] = None) -> List[Record]:
         """
         Parses the DataFrame into a list of structured records, handling single or multi-row records.
 
@@ -124,8 +125,8 @@ class RecordParser:
         pending = None
         subsections = None
         for idx, row in df.iterrows():
-            absolute_idx = idx + start_row_offset
-            record = self.parse_record(row, absolute_idx, full_df)
+            section_relative_idx = idx - start_row_offset  # Section-relative row index
+            record = self.parse_record(row, section_relative_idx, start_row_offset, full_df)
             if record:
                 record.subsection = subsections
                 if mode == 'single':
@@ -151,13 +152,14 @@ class RecordParser:
                         pending = None
         return records
 
-    def parse_record(self, row, row_idx: int, full_df: Optional[pd.DataFrame] = None) -> Optional[Record]:
+    def parse_record(self, row, section_relative_idx: int, section_start_row: int, full_df: Optional[pd.DataFrame] = None) -> Optional[Record]:
         """
         Parses a single row into a structured record.
 
         Parameters:
         row: The DataFrame row.
-        row_idx: The absolute row index in the full DataFrame
+        section_relative_idx: The section-relative row index
+        section_start_row: The starting row of the section in the full DataFrame
         full_df: The full DataFrame for RecordDetails
 
         Returns:
@@ -169,7 +171,11 @@ class RecordParser:
             scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
             details = None
             if full_df is not None:
-                details = RecordDetails(source=full_df, location=(row_idx, 3))
+                details = RecordDetails(
+                    source=full_df, 
+                    location=(section_relative_idx, 3),
+                    section_start_row=section_start_row
+                )
             return Record(
                 label=str(label),
                 name=name,
@@ -431,8 +437,9 @@ class ExcelImporter:
                     total = sum(scores)
                     mean = total / len(scores) if scores else 0
                     
-                    # Get the row and column from details
-                    row_idx, col_idx = record.details.location
+                    # Get the section-relative row and add section_start_row for absolute position
+                    section_relative_row, col_idx = record.details.location
+                    row_idx = section_relative_row + record.details.section_start_row
                     
                     # Column S is index 18 (A=0, B=1, ..., S=18)
                     # Format as "Sum: X, Mean: Y"
