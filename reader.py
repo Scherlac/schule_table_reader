@@ -166,6 +166,7 @@ class SectionParser:
     def _validate_section_records(self, section_name: str, records: List[Record], config: SectionConfig) -> None:
         """
         Validates the parsed records against the expected configuration.
+        More flexible validation that allows for missing or extra records.
 
         Parameters:
         section_name (str): The name of the section.
@@ -173,16 +174,28 @@ class SectionParser:
         config (SectionConfig): The configuration for validation.
 
         Raises:
-        ValueError: If validation fails.
+        ValueError: If validation fails critically.
         """
-        if config.expected_records is not None and len(records) != config.expected_records:
-            raise ValueError(f"Section {section_name}: expected {config.expected_records} records, got {len(records)}")
+        if not records:
+            # Allow missing sections - just warn and skip
+            print(f"Warning: Section {section_name} has no records - skipping evaluation for this section")
+            return
+
+        if config.expected_records is not None:
+            if len(records) != config.expected_records:
+                print(f"Warning: Section {section_name}: expected {config.expected_records} records, got {len(records)} - processing available records")
+
         if config.expected_questions is not None:
             if len(config.expected_questions) != len(records):
-                raise ValueError(f"Section {section_name}: expected_questions length {len(config.expected_questions)} != records {len(records)}")
+                print(f"Warning: Section {section_name}: expected_questions length {len(config.expected_questions)} != records {len(records)} - using available data")
+                # Use min length to avoid index errors
+                min_length = min(len(config.expected_questions), len(records))
+                config.expected_questions = config.expected_questions[:min_length]
+                records = records[:min_length]
+
             for i, (record, exp) in enumerate(zip(records, config.expected_questions)):
                 if len(record.scores) != exp:
-                    raise ValueError(f"Section {section_name}: record {i+1} expected {exp} questions, got {len(record.scores)}")
+                    print(f"Warning: Section {section_name}: record {i+1} expected {exp} questions, got {len(record.scores)} - using available scores")
 
     def parse_section(
             self, 
@@ -381,6 +394,8 @@ class ExcelImporter:
                     mean = scores.mean() 
 
                     normed_sum = max(expected_question, entered_questions) * mean
+                    # convert to int
+                    normed_sum = int(round(normed_sum))
 
                     record.eval_results = {
                         REPORT_EVAL_TEXT.SUM: total,
