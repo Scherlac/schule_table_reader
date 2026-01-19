@@ -3,6 +3,7 @@
 import pandas as pd
 import re
 import json
+import enum
 from typing import List, Dict, Tuple, Optional, Any
 from pydantic import BaseModel, Field, Field
 
@@ -22,11 +23,65 @@ class Record(BaseModel):
     subsection: Optional[str] = Field(default=None, description="Optional subsection name if the record belongs to a subsection")
 
 
+class REPORT_EVAL_ENUM(enum.Flag):
+    HIGH_GRADES = enum.auto()
+    NORMED_SUM = enum.auto()
+    MEAN = enum.auto()
+    COPY = enum.auto()
+
+report_evlal_dict = {
+    "> max - dev": REPORT_EVAL_ENUM.HIGH_GRADES,
+    "normed sum": REPORT_EVAL_ENUM.NORMED_SUM,
+    "mean": REPORT_EVAL_ENUM.MEAN,
+    "copy": REPORT_EVAL_ENUM.COPY
+}
+
+
 class SectionConfig(BaseModel):
     approx_start: int = Field(description="Approximate starting row for searching the section")
     multi_row: bool = Field(description="Whether records in this section span multiple rows")
     expected_records: Optional[int] = Field(default=None, description="Expected number of records in the section")
     expected_questions: Optional[List[int]] = Field(default=None, description="Expected number of questions per record")
+    # "classification": [1, 1, 1, 1, 1, 2, 2, 3, 3],
+    classification: Optional[List[int]] = Field(default=None, description="Class identifiers for each record"),
+    # "class_marker": ["cognitive", "social", "logic"],
+    class_marker: Optional[List[str]] = Field(default=None, description="Class markers for grouping records"),
+    # "question_id": [11, 12, 21, 22, 31, 41, 42, 51, 52],
+    question_id: Optional[List[int]] = Field(default=None, description="Question IDs for each record"),
+    # "report_eval": "> max - dev"
+    report_eval: Optional[str] = Field(default=None, description="Evaluation criteria for reporting scores")
+
+    @property
+    def report_eval_flags(self) -> REPORT_EVAL_ENUM:
+        """
+        Parses the report_eval string into a combined REPORT_EVAL_ENUM flag.
+
+        Returns:
+        REPORT_EVAL_ENUM: Combined flags based on the report_eval configuration.
+        """
+        if not self.report_eval:
+            return REPORT_EVAL_ENUM(0)
+        flags = REPORT_EVAL_ENUM(0)
+        parts = [part.strip() for part in self.report_eval.split(',')]
+        for part in parts:
+            if part in report_evlal_dict:
+                flags |= report_evlal_dict[part]
+        return flags
+    
+    @report_eval_flags.setter
+    def report_eval_flags(self, flags: REPORT_EVAL_ENUM) -> None:
+        """
+        Sets the report_eval string based on the provided REPORT_EVAL_ENUM flags.
+
+        Parameters:
+        flags (REPORT_EVAL_ENUM): Combined flags to set the report_eval configuration.
+        """
+        parts = []
+        for key, value in report_evlal_dict.items():
+            if flags & value:
+                parts.append(key)
+        self.report_eval = ', '.join(parts)
+
 
 
 class SectionResult(BaseModel):

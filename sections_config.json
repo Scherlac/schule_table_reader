@@ -3,24 +3,39 @@
         "approx_start": 0,
         "multi_row": false,
         "expected_records": 9,
-        "expected_questions": [4, 4, 8, 9, 6, 6, 6, 10, 4]
+        "expected_questions": [4, 4, 8, 9, 6, 6, 6, 10, 4],
+        "classification": [1, 1, 1, 1, 1, 2, 2, 3, 3],
+        "class_marker": ["cognitive", "social", "logic"],
+        "question_id": [11, 12, 21, 22, 31, 41, 42, 51, 52],
+        "report_eval": "> max - dev"
     },
     "RAVEN": {
         "approx_start": 14,
         "multi_row": false,
         "expected_records": 1,
-        "expected_questions": [1]
+        "expected_questions": [1],
+        "report_eval": "copy"
     },
     "MOTIVÁCIÓ": {
         "approx_start": 18,
         "multi_row": false,
         "expected_records": 10,
-        "expected_questions": [6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+        "expected_questions": [6, 6, 6, 6, 6, 6, 6, 6, 6, 6],
+        "classification": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4],
+        "class_marker": ["követő", "érdeklődő", "teljesítő", "kényszer"],
+        "question_id": [91, 92, 93, 94, 95, 96, 97, 98, 99, 100],
+        "report_eval": "> max - dev"
+
     },
     "KATT": {
         "approx_start": 25,
         "multi_row": true,
         "expected_records": 6,
-        "expected_questions": [14, 8, 12, 6, 10, 8]
+        "expected_questions": [14, 8, 12, 6, 10, 8],
+        "classification": [1, 1, 1, 1, 1, 1],
+        "class_marker": ["KATT"],
+        "question_id": [71, 72, 73, 74, 75, 76],
+        "report_eval": "> max - dev, normed sum"
     }
+    // mean, normed sum, >? max - dev (overall), >? max - dev (class)  
 }
