@@ -108,11 +108,19 @@ class RecordParser:
     """
     Parser class for extracting structured data from individual Excel rows and sections.
     """
+    ECIX : int = 3  # Expected column index for record content (0-indexed, so 3 = column D)
 
     def __init__(self) -> None:
         pass
 
-    def parse_records(self, df: pd.DataFrame, section_name: str, mode: str, start_row_offset: int, full_df: Optional[pd.DataFrame] = None) -> List[Record]:
+    def parse_records(
+            self, 
+            df: pd.DataFrame, 
+            section_name: str, 
+            mode: str, 
+            start_row_offset: int, 
+            full_df: Optional[pd.DataFrame] = None, 
+            expected_col_index: int = 3) -> List[Record]:
         """
         Parses the DataFrame into a list of structured records, handling single or multi-row records.
 
@@ -122,13 +130,14 @@ class RecordParser:
         section_name (str): the name of the section
         start_row_offset (int): The offset to add to row indices to get absolute positions
         full_df (pd.DataFrame): The full DataFrame for RecordDetails
-
+        expected_col_index (int): The expected column index for record content
         Returns:
         list: List of Record objects, each with 'name', 'items', 'modifiers', 'scores'.
         """
         records = []
         pending = None
         subsections = None
+        self.ECIX = expected_col_index
         for idx, row in df.iterrows():
             section_relative_idx = idx - start_row_offset  # Section-relative row index
             record = self.parse_record(row, section_relative_idx, start_row_offset, full_df)
@@ -170,15 +179,15 @@ class RecordParser:
         Returns:
         Record: Record object with 'label', 'name', 'items', 'modifiers', 'scores' or None if no label.
         """
-        if len(row) > 3 and pd.notna(row[3]):
-            label = row[3]
+        if len(row) > self.ECIX and pd.notna(row[self.ECIX]):
+            label = row[self.ECIX]
             name, items, modifiers = self._parse_item_string(str(label))
-            scores = [row[i] for i in range(4, len(row)) if pd.notna(row[i])]
+            scores = [row[i] for i in range(self.ECIX + 1, len(row)) if pd.notna(row[i])]
             details = None
             if full_df is not None:
                 details = RecordDetails(
                     source=full_df, 
-                    location=(section_relative_idx, 3)
+                    location=(section_relative_idx, self.ECIX)
                 )
             return Record(
                 label=str(label),
@@ -233,6 +242,7 @@ class SectionParser:
     """
     Parser class for extracting structured data from Excel sections.
     """
+    ECIX : int = 3  # Expected column index for record content (0-indexed, so 3 = column D)
 
     def __init__(self, all_sections: List[str], config: SectionConfig) -> None:
         self.record_parser = RecordParser()
@@ -277,14 +287,14 @@ class SectionParser:
         # Find the exact start and end rows
         start_row = None
         end_row = len(df)
-        column_index = -1  # Search all columns
         markers = [s for s in self.all_sections if s != section_name]
         for idx in range(self.config.approx_start, len(df)):
             row = df.iloc[idx]
-            for cell in row:
+            for cix, cell in enumerate(row):
                 if pd.notna(cell):
                     cell_str = str(cell)
                     if start_row is None and section_name in cell_str:
+                        self.ECIX = cix
                         start_row = idx
                     elif start_row is not None and any(marker in cell_str for marker in markers):
                         end_row = idx
@@ -298,7 +308,7 @@ class SectionParser:
         section_df = df.iloc[start_row:end_row]
 
         mode = 'multi' if self.config.multi_row else 'single'
-        records = self.record_parser.parse_records(section_df, section_name, mode, start_row, df)
+        records = self.record_parser.parse_records(section_df, section_name, mode, start_row, df, self.ECIX)
         self._validate_section_records(section_name, records, self.config)
         return SectionResult(
             details=SectionDetails(selection_df=section_df, start_row=start_row, end_row=end_row),
@@ -310,6 +320,7 @@ class ExcelImporter:
     """
     Importer class to capture and structure the content of the Excel file.
     """
+    RCIX : int = 20  # Starting column index for record content (0-indexed, so 20 = column U)
 
     def __init__(self, file_path: str) -> None:
         """
@@ -326,6 +337,8 @@ class ExcelImporter:
             self.child_name : Optional[str] = None
 
             self.sections_config : Dict[str, SectionConfig] = {}
+
+            
 
             # Load section configuration from JSON
             self._load_config('sections_config.json')
@@ -436,9 +449,9 @@ class ExcelImporter:
 
 
             # Add column headers at section start row
-            self.df.iloc[section_start_row, 18] = "Sum"
-            self.df.iloc[section_start_row, 19] = "Mean"
-            self.df.iloc[section_start_row, 20] = "Normed Sum"
+            self.df.iloc[section_start_row, self.RCIX + 0] = "Sum"
+            self.df.iloc[section_start_row, self.RCIX + 1] = "Mean"
+            self.df.iloc[section_start_row, self.RCIX + 2] = "Normed Sum"
             
             # Process each record in the section
             for i, record in enumerate(section_result.records):
@@ -462,22 +475,21 @@ class ExcelImporter:
                     section_relative_row, col_idx = record.details.location
                     row_idx = section_relative_row + section_result.details.start_row
                     
-                    # Column S (18) for Sum, Column T (19) for Mean
-                    self.df.iloc[row_idx, 18] = total
+                    # Column U (20) for Sum, Column V (21) for Mean
+                    self.df.iloc[row_idx, self.RCIX + 0] = total
 
                     mean = round(mean, 2)
-                    self.df.iloc[row_idx, 19] = mean
+                    self.df.iloc[row_idx, self.RCIX + 1] = mean
 
-
-                    self.df.iloc[row_idx, 20] = normed_sum
+                    self.df.iloc[row_idx, self.RCIX + 2] = normed_sum
 
     def update_excel_with_subsection_statistics(self, section_name : str, section_result: SectionResult) -> None:
         section_start_row = section_result.details.start_row
 
         # Add column headers at section start row
-        self.df.iloc[section_start_row, 21] = "Grade limit"
-        self.df.iloc[section_start_row, 22] = "Class evaluation"
-        self.df.iloc[section_start_row, 23] = "Record evaluation"
+        self.df.iloc[section_start_row, self.RCIX + 3] = "Grade limit"
+        self.df.iloc[section_start_row, self.RCIX + 4] = "Class evaluation"
+        self.df.iloc[section_start_row, self.RCIX + 5] = "Record evaluation"
 
         classification = self.sections_config[section_name].classification
         question_id = self.sections_config[section_name].question_id
@@ -489,11 +501,9 @@ class ExcelImporter:
         selection_classification : Dict[str, dict[str, Any]] = {}
         for class_id in set(classification):
             marker = class_marker[class_id - 1]  # assuming class_id starts from 1
-            record_mask = ((i, idx) for i, (c, idx) in enumerate(zip(classification, question_id)) if c == class_id)
-            records_in_class = [section_result.records[i] for i, _ in record_mask]
-            
+            records_in_class = [(i, idx, section_result.records[i]) for i, (c, idx) in enumerate(zip(classification, question_id)) if c == class_id]
 
-            means = [r.eval_results['mean'] for r in records_in_class if r.eval_results and 'mean' in r.eval_results]
+            means = [r.eval_results['mean'] for i, idx, r in records_in_class if r.eval_results and 'mean' in r.eval_results]
             std_of_means = np.std(means) if means else 0
             max_of_means = np.max(means) if means else 0
 
@@ -501,7 +511,7 @@ class ExcelImporter:
 
             selected_records = []
 
-            for record, (i, idx) in zip(records_in_class, record_mask):
+            for i, idx, record in records_in_class:
 
                 section_relative_row, col_idx = record.details.location
                 row_idx = section_relative_row + section_result.details.start_row
@@ -511,20 +521,18 @@ class ExcelImporter:
                     selected_records.append(idx)
 
                     # add to excel
-                    self.df.iloc[row_idx, 23] = "High" if is_high else "Other"
+                    self.df.iloc[row_idx, self.RCIX + 5] = "High" if is_high else "Other"
 
             class_evaluation = f"{marker}: { ', '.join(map(str, selected_records)) }"
 
-            first_record = records_in_class[0]
+            i, idx, first_record = records_in_class[0]
             section_relative_row, col_idx = first_record.details.location
             row_idx = section_relative_row + section_result.details.start_row
 
-            self.df.iloc[row_idx, 21] = round(high_grade_limit, 2)
-            self.df.iloc[row_idx, 22] = class_evaluation
-
+            self.df.iloc[row_idx, self.RCIX + 3] = round(high_grade_limit, 2)
+            self.df.iloc[row_idx, self.RCIX + 4] = class_evaluation
             selection_classification[marker] = {
                 "records": records_in_class,
-                "record_mask": record_mask,
                 "means": means,
                 "std_of_means": std_of_means,
                 "max_of_means": max_of_means,
