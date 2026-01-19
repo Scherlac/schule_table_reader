@@ -37,5 +37,4 @@
         "question_id": [71, 72, 73, 74, 75, 76],
         "report_eval": "> max - dev, normed sum"
     }
-    // mean, normed sum, >? max - dev (overall), >? max - dev (class)  
 }

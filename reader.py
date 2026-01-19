@@ -5,13 +5,20 @@ import re
 import json
 import enum
 from typing import List, Dict, Tuple, Optional, Any
-from pydantic import BaseModel, Field, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class SectionDetails(BaseModel):
     selection_df: Any = Field(description="The DataFrame containing the selected section data")
     start_row: int = Field(description="The starting row index of the section")
     end_row: int = Field(description="The ending row index of the section")
+
+
+class RecordDetails(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
+    source: pd.DataFrame = Field(description="The DataFrame containing the source data")
+    location: Tuple[int, int] = Field(description="The (row, column) coordinates in the table")
 
 
 class Record(BaseModel):
@@ -21,6 +28,7 @@ class Record(BaseModel):
     modifiers: List[str] = Field(description="List of modifiers for each item")
     scores: List[Any] = Field(description="List of score values for the record")
     subsection: Optional[str] = Field(default=None, description="Optional subsection name if the record belongs to a subsection")
+    details: Optional[RecordDetails] = Field(default=None, description="Details about the source and location of the data")
 
 
 class REPORT_EVAL_ENUM(enum.Flag):
