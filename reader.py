@@ -411,7 +411,8 @@ class ExcelImporter:
 
     def update_excel_with_statistics(self, output_file: str) -> None:
         """
-        Calculates sum and mean for all records and updates the Excel file with results in column S.
+        Calculates sum and mean for all records and updates the Excel file with results in columns S and T.
+        Adds column headers at section start rows.
         
         Parameters:
         output_file (str): The path to save the updated Excel file.
@@ -420,15 +421,22 @@ class ExcelImporter:
             print("No data loaded.")
             return
 
-        # Ensure the DataFrame has at least 19 columns (0-18, where 18 is column S)
-        while len(self.df.columns) <= 18:
+        # Ensure the DataFrame has at least 20 columns (0-19, where 18 is column S, 19 is column T)
+        while len(self.df.columns) <= 19:
             self.df[len(self.df.columns)] = None
 
         # Get all parsed sections
         parsed_sections = self.get_parsed_sections()
         
-        # Process each record and update the DataFrame
+        # Process each section
         for section_name, section_result in parsed_sections.items():
+            section_start_row = section_result.details.start_row
+            
+            # Add column headers at section start row
+            self.df.iloc[section_start_row, 18] = "Sum"
+            self.df.iloc[section_start_row, 19] = "Mean"
+            
+            # Process each record in the section
             for record in section_result.records:
                 if record.scores and record.details:
                     scores = record.scores
@@ -439,16 +447,9 @@ class ExcelImporter:
                     section_relative_row, col_idx = record.details.location
                     row_idx = section_relative_row + section_result.details.start_row
                     
-                    # Column S is index 18 (A=0, B=1, ..., S=18)
-                    # Format as "Sum: X, Mean: Y"
-                    result_text = f"Sum: {total}, Mean: {mean:.2f}"
-                    
-                    # Ensure we have enough rows
-                    if row_idx >= len(self.df):
-                        continue
-                    
-                    # Update the DataFrame at column S (index 18)
-                    self.df.iloc[row_idx, 18] = result_text
+                    # Column S (18) for Sum, Column T (19) for Mean
+                    self.df.iloc[row_idx, 18] = total
+                    self.df.iloc[row_idx, 19] = round(mean, 2)
         
         # Save the updated DataFrame to Excel
         self.df.to_excel(output_file, index=False, header=False)
