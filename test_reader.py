@@ -9,6 +9,7 @@ import os
 import pathlib
 import pandas as pd
 from reader import ExcelImporter, RecordParser
+from models import REPORT_EVAL_ENUM, REPORT_EVAL_TEXT
 
 
 def test_parse_item_string():
