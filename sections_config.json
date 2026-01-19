@@ -7,7 +7,7 @@
         "classification": [1, 1, 1, 1, 1, 2, 2, 3, 3],
         "class_marker": ["cognitive", "social", "logic"],
         "question_id": [11, 12, 21, 22, 31, 41, 42, 51, 52],
-        "class_eval": "> max - dev"
+        "class_eval": "grade_limit,> grade_limit"
     },
     "RAVEN": {
         "approx_start": 14,
@@ -24,7 +24,7 @@
         "classification": [1, 1, 1, 2, 2, 2, 3, 3, 3, 4],
         "class_marker": ["követő", "érdeklődő", "teljesítő", "kényszer"],
         "question_id": [91, 92, 93, 94, 95, 96, 97, 98, 99, 100],
-        "class_eval": "> max - dev"
+        "class_eval": "grade_limit,> grade_limit,mean,std"
 
     },
     "KATT": {
@@ -35,7 +35,7 @@
         "classification": [1, 1, 1, 1, 1, 1],
         "class_marker": ["KATT"],
         "question_id": [71, 72, 73, 74, 75, 76],
-        "class_eval": "> max - dev",
+        "class_eval": "grade_limit,> grade_limit,mean,std",
         "record_eval": "normed sum"
     }
 }

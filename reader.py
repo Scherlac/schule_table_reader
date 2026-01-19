@@ -8,26 +8,47 @@ import numpy as np
 import math
 import shutil
 import openpyxl
+import os
+import pathlib
 from typing import List, Dict, Tuple, Optional, Any, Annotated
 from pydantic import BaseModel, Field
 
 
 class REPORT_EVAL_ENUM(enum.Flag):
+    GRADE_LIMIT = enum.auto()
     HIGH_GRADES = enum.auto()
-    HIGH_GRADES_TOTAL = enum.auto()
+    COPY = enum.auto()
     MEAN = enum.auto()
+    STD = enum.auto()
+    MIN = enum.auto()
+    MAX = enum.auto()
     SUM = enum.auto()
     NORMED_SUM = enum.auto()
-    COPY = enum.auto()
 
-report_eval_dict = {
-    "> max - dev": REPORT_EVAL_ENUM.HIGH_GRADES,
-    "> max - dev (total)": REPORT_EVAL_ENUM.HIGH_GRADES_TOTAL,
-    "mean": REPORT_EVAL_ENUM.MEAN,
-    "sum": REPORT_EVAL_ENUM.SUM,
-    "normed sum": REPORT_EVAL_ENUM.NORMED_SUM,
-    "copy": REPORT_EVAL_ENUM.COPY
+class REPORT_EVAL_TEXT(enum.Enum):
+    GRADE_LIMIT = "grade_limit"
+    HIGH_GRADES = "> grade_limit"
+    COPY = "copy"
+    MEAN = "mean"
+    STD = "std"
+    MIN = "min"
+    MAX = "max"
+    SUM = "sum"
+    NORMED_SUM = "normed sum"
+
+report_eval_to_enum = {
+    REPORT_EVAL_TEXT.GRADE_LIMIT.value: REPORT_EVAL_ENUM.GRADE_LIMIT,
+    REPORT_EVAL_TEXT.HIGH_GRADES.value: REPORT_EVAL_ENUM.HIGH_GRADES,
+    REPORT_EVAL_TEXT.COPY.value: REPORT_EVAL_ENUM.COPY,
+    REPORT_EVAL_TEXT.MEAN.value: REPORT_EVAL_ENUM.MEAN,
+    REPORT_EVAL_TEXT.STD.value: REPORT_EVAL_ENUM.STD,
+    REPORT_EVAL_TEXT.MIN.value: REPORT_EVAL_ENUM.MIN,
+    REPORT_EVAL_TEXT.MAX.value: REPORT_EVAL_ENUM.MAX,
+    REPORT_EVAL_TEXT.SUM.value: REPORT_EVAL_ENUM.SUM,
+    REPORT_EVAL_TEXT.NORMED_SUM.value: REPORT_EVAL_ENUM.NORMED_SUM
 }
+
+report_eval_to_text = {v: k for k, v in report_eval_to_enum.items()}
 
 
 class SectionDetails(BaseModel):
@@ -81,8 +102,8 @@ class SectionConfig(BaseModel):
         flags = REPORT_EVAL_ENUM(0)
         parts = [part.strip() for part in self.class_eval.split(',')]
         for part in parts:
-            if part in report_eval_dict:
-                flags |= report_eval_dict[part]
+            if part in report_eval_to_enum:
+                flags |= report_eval_to_enum[part]
         return flags
     
     @class_eval_flags.setter
@@ -94,7 +115,7 @@ class SectionConfig(BaseModel):
         flags (REPORT_EVAL_ENUM): Combined flags to set the class_eval configuration.
         """
         parts = []
-        for key, value in report_eval_dict.items():
+        for key, value in report_eval_to_enum.items():
             if flags & value:
                 parts.append(key)
         self.class_eval = ', '.join(parts)
@@ -112,8 +133,8 @@ class SectionConfig(BaseModel):
         flags = REPORT_EVAL_ENUM(0)
         parts = [part.strip() for part in self.record_eval.split(',')]
         for part in parts:
-            if part in report_eval_dict:
-                flags |= report_eval_dict[part]
+            if part in report_eval_to_enum:
+                flags |= report_eval_to_enum[part]
         return flags
     
     @record_eval_flags.setter
@@ -125,16 +146,21 @@ class SectionConfig(BaseModel):
         flags (REPORT_EVAL_ENUM): Combined flags to set the record_eval configuration.
         """
         parts = []
-        for key, value in report_eval_dict.items():
+        for key, value in report_eval_to_enum.items():
             if flags & value:
                 parts.append(key)
         self.record_eval = ', '.join(parts)
 
-
+class ClassResult(BaseModel):
+    class_id: int = Field(description="Identifier for the class")
+    marker: str = Field(description="Marker for the class")
+    records: List[Record] = Field(description="List of records belonging to the class")
+    eval_results: Dict[str, Any] = Field(description="Evaluation results for the class")
 
 class SectionResult(BaseModel):
     details: SectionDetails = Field(description="Details about the section extraction")
     records: List[Record] = Field(description="List of parsed records from the section")
+    class_results: Optional[Dict[str, ClassResult]] = Field({}, description="Optional mapping of class markers to their results")
     # subsections: Optional[Dict[str, List[Record]]] = Field(default=None, description="Optional mapping of subsection names to their records")
 
 
@@ -503,9 +529,9 @@ class ExcelImporter:
                     normed_sum = max(expected_question, entered_questions) * mean
 
                     record.eval_results = {
-                        "sum": total,
-                        "mean": mean,
-                        "normed_sum": normed_sum
+                        REPORT_EVAL_TEXT.SUM: total,
+                        REPORT_EVAL_TEXT.MEAN: mean,
+                        REPORT_EVAL_TEXT.NORMED_SUM: normed_sum
                     }
                     
                     # Get the section-relative row and add section_start_row for absolute position
@@ -514,10 +540,7 @@ class ExcelImporter:
                     
                     # Column U (20) for Sum, Column V (21) for Mean
                     self.df.iloc[row_idx, self.RCIX + 0] = total
-
-                    mean = round(mean, 2)
                     self.df.iloc[row_idx, self.RCIX + 1] = mean
-
                     self.df.iloc[row_idx, self.RCIX + 2] = normed_sum
 
     def update_excel_with_subsection_statistics(self, section_name : str, section_result: SectionResult) -> None:
@@ -535,14 +558,19 @@ class ExcelImporter:
             return
         
         # Process each class
-        selection_classification : Dict[str, dict[str, Any]] = {}
+        class_results : Dict[str, ClassResult] = section_result.class_results
         for class_id in set(classification):
             marker = class_marker[class_id - 1]  # assuming class_id starts from 1
             records_in_class = [(i, idx, section_result.records[i]) for i, (c, idx) in enumerate(zip(classification, question_id)) if c == class_id]
 
-            means = [r.eval_results['mean'] for i, idx, r in records_in_class if r.eval_results and 'mean' in r.eval_results]
-            std_of_means = np.std(means) if means else 0
-            max_of_means = np.max(means) if means else 0
+            try:
+                means = np.array([r.eval_results[REPORT_EVAL_TEXT.MEAN] for i, idx, r in records_in_class if r.eval_results and REPORT_EVAL_TEXT.MEAN in r.eval_results]) 
+            except:
+                means = np.array([])
+
+            mean_of_means = means.mean() 
+            std_of_means = means.std()
+            max_of_means = means.max()
 
             high_grade_limit = (1.0 - 0.001) * (max_of_means - std_of_means) # 0.001 error margin
 
@@ -553,30 +581,33 @@ class ExcelImporter:
                 section_relative_row, col_idx = record.details.location
                 row_idx = section_relative_row + section_result.details.start_row
 
-                if record.eval_results and 'mean' in record.eval_results:
-                    is_high = record.eval_results['mean'] >= high_grade_limit
+                if record.eval_results and REPORT_EVAL_TEXT.MEAN in record.eval_results:
+                    is_high = record.eval_results[REPORT_EVAL_TEXT.MEAN] >= high_grade_limit
                     if is_high:
                         selected_records.append(idx)
 
                     # add to excel
                     self.df.iloc[row_idx, self.RCIX + 5] = "High" if is_high else "Other"
 
-            class_evaluation = f"{marker}: { ', '.join(map(str, selected_records)) }"
+            class_evaluation = ', '.join(map(str, selected_records))
 
             i, idx, first_record = records_in_class[0]
             section_relative_row, col_idx = first_record.details.location
             row_idx = section_relative_row + section_result.details.start_row
 
             self.df.iloc[row_idx, self.RCIX + 3] = round(high_grade_limit, 2)
-            self.df.iloc[row_idx, self.RCIX + 4] = class_evaluation
-            selection_classification[marker] = {
-                "records": records_in_class,
-                "means": means,
-                "std_of_means": std_of_means,
-                "max_of_means": max_of_means,
-                "high_grade_limit": high_grade_limit,
-                "class_evaluation": class_evaluation
-            }
+            self.df.iloc[row_idx, self.RCIX + 4] = f"{marker}: {class_evaluation}"
+            class_results[marker] = ClassResult(
+                class_id=class_id,
+                marker=marker,
+                records=[r for i, idx, r in records_in_class],
+                eval_results={
+                    REPORT_EVAL_TEXT.GRADE_LIMIT : high_grade_limit,
+                    REPORT_EVAL_TEXT.HIGH_GRADES : class_evaluation,
+                    REPORT_EVAL_TEXT.MEAN : mean_of_means,
+                    REPORT_EVAL_TEXT.STD : std_of_means,
+                    REPORT_EVAL_TEXT.MAX : max_of_means,
+                })
 
 
 
@@ -586,11 +617,18 @@ class ExcelImporter:
         Adds column headers at section start rows.
         
         Parameters:
-        output_file (str): The path to save the updated Excel file.
+        output_file (str): The path to save the updated Excel file. Can include a folder path.
         """
         if self.df is None:
             print("No data loaded.")
             return
+
+        # Ensure the output directory exists
+        self.output_file = pathlib.Path(output_file)
+        self.output_dir = self.output_file.parent.absolute()
+        if not self.output_dir.exists():
+            print(f"Creating output directory: {str(self.output_dir)}")
+            self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy the original Excel file to the output location first
         shutil.copy2(self.file_path, output_file)
@@ -630,5 +668,55 @@ class ExcelImporter:
         
         wb.save(output_file)
         print(f"Updated Excel saved to: {output_file}")
+
+    def evaluate(self) -> pd.DataFrame:
+        """
+        Placeholder for future evaluation logic.
+        """
+        result = {}
+
+        for section_name, section_result in self.parsed_sections.items():
+            selection_config : SectionConfig  = self.sections_config[section_name]
+            class_eval = [s.strip() for s in (selection_config.class_eval or '').split(',')]
+            record_eval = [s.strip() for s in (selection_config.record_eval or '').split(',')]
+            print(f"Evaluating section: {section_name}")
+
+            #iterate over the classes and append evaluation results
+            for marker in set(selection_config.class_marker or []):
+                if marker not in section_result.class_results:
+                    continue
+                class_result = section_result.class_results[marker]
+
+                # iterate over the flags and append evaluation results
+                for label in class_eval:
+                    if label not in report_eval_to_enum:
+                        continue
+                    value = label
+                    if value in class_result.eval_results:
+                        result[f"{marker}: {label}"] = class_result.eval_results[value]
+
+            # iterate over the records and append evaluation results
+            record : Record = None
+            for i, record in enumerate(section_result.records):
+                if selection_config.classification:
+                    class_id = selection_config.classification[i]
+                    marker = selection_config.class_marker[class_id - 1]
+                else:
+                    marker = record.name
+                for label in record_eval:
+                    if label not in report_eval_to_enum:
+                        continue
+                    value = label
+                    if record.eval_results and value in record.eval_results:
+                        result[f"{marker} - {record.name}: {label}"] = record.eval_results[value]
+
+        # If using all scalar values, you must pass an index
+        # child_name as index
+        if self.child_name is None:
+            self.child_name = "Unknown"
+        
+        return pd.DataFrame(result, index=[self.child_name])
+
+
 
     

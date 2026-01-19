@@ -50,8 +50,12 @@ def test_excel_importer():
     importer.dump_report()
     
     # Update Excel with statistics
-    output_file = 'példatáblázat_updated.xlsx'
+    output_file = 'példatáblázat_final.xlsx'
     importer.update_excel_with_statistics(output_file)
+
+    df_data = importer.evaluate()
+    print("Evaluation DataFrame:")
+    print(df_data.head())
 
 if __name__ == "__main__":
     test_parse_item_string()
