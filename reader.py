@@ -6,6 +6,8 @@ import json
 import enum
 import numpy as np
 import math
+import shutil
+import openpyxl
 from typing import List, Dict, Tuple, Optional, Any, Annotated
 from pydantic import BaseModel, Field
 
@@ -320,7 +322,8 @@ class ExcelImporter:
     """
     Importer class to capture and structure the content of the Excel file.
     """
-    RCIX : int = 20  # Starting column index for record content (0-indexed, so 20 = column U)
+    RCIX : int = 24  # Starting column index for record content (0-indexed, so 24 = column Y)
+    ECIX : int = 3   # Expected column index for record content (0-indexed, so 3 = column D)
 
     def __init__(self, file_path: str) -> None:
         """
@@ -331,6 +334,7 @@ class ExcelImporter:
         """
         # try:
         if True:
+            self.file_path = file_path
             self.df = pd.read_excel(file_path, header=None)
             self.sections : Dict[str, pd.DataFrame] = {}
             self.parsed_sections : Dict[str, SectionResult] = {}
@@ -368,7 +372,7 @@ class ExcelImporter:
 
         # Extract child name (assuming in row 1, column 3 - 0-indexed row 1, col 3)
         if len(self.df) > 1 and len(self.df.columns) > 3:
-            self.child_name = self.df.iloc[1, 3] if pd.notna(self.df.iloc[1, 3]) else None
+            self.child_name = self.df.iloc[1, self.ECIX] if pd.notna(self.df.iloc[1, self.ECIX]) else None
 
         all_sections = list(self.sections_config.keys())
 
@@ -518,7 +522,8 @@ class ExcelImporter:
 
                 if record.eval_results and 'mean' in record.eval_results:
                     is_high = record.eval_results['mean'] >= high_grade_limit
-                    selected_records.append(idx)
+                    if is_high:
+                        selected_records.append(idx)
 
                     # add to excel
                     self.df.iloc[row_idx, self.RCIX + 5] = "High" if is_high else "Other"
@@ -554,8 +559,12 @@ class ExcelImporter:
             print("No data loaded.")
             return
 
+        # Copy the original Excel file to the output location first
+        shutil.copy2(self.file_path, output_file)
+        print(f"Copied original Excel file to: {output_file}")
+
         # Ensure the DataFrame has at least 20 columns (0-19, where 18 is column S, 19 is column T)
-        while len(self.df.columns) <= 26:
+        while len(self.df.columns) <= self.RCIX + 7:
             self.df[len(self.df.columns)] = None
 
         # Get all parsed sections
@@ -571,8 +580,22 @@ class ExcelImporter:
             self.update_excel_with_subsection_statistics(section_name, section_result)
             
 
-        # Save the updated DataFrame to Excel
-        self.df.to_excel(output_file, index=False, header=False)
+        # Update the copied Excel file with the modified data
+        wb = openpyxl.load_workbook(output_file)
+        ws = wb.active
+        
+        # Write the DataFrame data to the worksheet, preserving formatting
+        for row_idx in range(len(self.df)):
+            for col_idx in range(len(self.df.columns)):
+                value = self.df.iloc[row_idx, col_idx]
+                # Convert numpy types to native Python types for Excel
+                if pd.isna(value):
+                    value = None
+                elif hasattr(value, 'item'):  # numpy scalar
+                    value = value.item()
+                ws.cell(row=row_idx + 1, column=col_idx + 1, value=value)
+        
+        wb.save(output_file)
         print(f"Updated Excel saved to: {output_file}")
 
     
