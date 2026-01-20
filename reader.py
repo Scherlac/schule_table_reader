@@ -575,8 +575,8 @@ class ExcelImporter:
                 for label in record_eval:
                     if label not in report_eval_to_enum:
                         continue
-                    value = label
-                    if record.eval_results and value in record.eval_results:
+                    value = REPORT_EVAL_TEXT(label)
+                    if value in record.eval_results:
                         result[f"{marker} - {record.name}: {label}"] = record.eval_results[value]
 
         # If using all scalar values, you must pass an index
